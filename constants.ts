@@ -1,3 +1,4 @@
+
 import { TargetLanguage, AppLanguage, FilterType } from './types';
 
 export const GEMINI_MODEL = 'gemini-2.5-flash';
@@ -15,6 +16,7 @@ Rules:
 export const LANGUAGES: { code: TargetLanguage; label: string; flag: string }[] = [
   { code: TargetLanguage.EN, label: 'Film: English', flag: 'EN' },
   { code: TargetLanguage.CN, label: 'Film: Classic', flag: '繁' },
+  { code: TargetLanguage.CN_SIMPLE, label: 'Film: Modern', flag: '简' },
   { code: TargetLanguage.JP, label: 'Film: Tokyo', flag: 'JP' },
   { code: TargetLanguage.FR, label: 'Film: Paris', flag: 'FR' },
   { code: TargetLanguage.KR, label: 'Film: Seoul', flag: 'KR' },
@@ -43,7 +45,12 @@ export const UI_TEXT = {
     journal: "Journal",
     settings: "Settings",
     appLang: "App Language",
-    filmStock: "Default Film Stock",
+    cardLang: "Card Language",
+    aspectRatio: "Photo Ratio",
+    aspectRatioOpts: {
+      square: "1:1 Square",
+      dynamic: "Dynamic"
+    },
     save: "Save",
     reprint: "Reprint",
     reprinting: "Reprinting...",
@@ -66,7 +73,13 @@ export const UI_TEXT = {
       [FilterType.MONO]: "Mono",
       [FilterType.MOON]: "Moonlight",
       [FilterType.SUN]: "Sunlight"
-    }
+    },
+    philosophy: {
+      title: "To You, Looking Up",
+      content: "We live in a world that rushes forward, heads down, buried in screens and schedules.\n\nBut above us, there is a canvas that changes every second, yet has watched over us for eternity.\n\nSkyStory was built not just to identify clouds or stars, but to give you a reason to pause. To breathe. To find a moment of romance in the mundane.\n\nWe believe the sky is the world's oldest language. We just help you translate it.\n\nThank you for looking up with us.",
+      contact: "Author WeChat: Cambia2214"
+    },
+    install: "Install App"
   },
   [AppLanguage.CN]: {
     subtitle: "把天空变成最浪漫的诗",
@@ -75,7 +88,12 @@ export const UI_TEXT = {
     journal: "天空手账",
     settings: "设置",
     appLang: "应用语言",
-    filmStock: "默认底片 (内容语言)",
+    cardLang: "卡片语言",
+    aspectRatio: "图片比例",
+    aspectRatioOpts: {
+      square: "1:1 方形",
+      dynamic: "动态 (全景/竖屏)"
+    },
     save: "保存",
     reprint: "重印/翻译",
     reprinting: "重新显影中...",
@@ -98,12 +116,19 @@ export const UI_TEXT = {
       [FilterType.MONO]: "黑白",
       [FilterType.MOON]: "月光",
       [FilterType.SUN]: "暖阳"
-    }
+    },
+    philosophy: {
+      title: "致每一个抬头看天的你",
+      content: "我们生活在一个匆忙的时代，\n大多数时候，我们低头赶路，\n沉浸在屏幕与日程表中。\n\n但在我们头顶，\n有一幅每秒钟都在变化的画卷，\n它沉默地注视了人类百万年。\n\nSkyStory 的诞生，\n不仅仅是为了识别云彩或星座，（星座部分正在加紧做！）\n更是为了给你一个停下来的理由。\n去呼吸，去在平凡的日常中寻找片刻的浪漫。\n\n我们相信，天空是世界上最古老的语言。\n我们只是帮你翻译了它。\n\n谢谢你，和我们一起抬头。",
+      contact: "作者微信: Cambia2214"
+    },
+    install: "安装到桌面"
   }
 };
 
 export const DEFAULT_SETTINGS = {
-  appLanguage: AppLanguage.CN, // Default to CN for better font showcase
-  defaultFilmStock: TargetLanguage.CN,
-  saveToDevice: true
+  appLanguage: AppLanguage.CN,
+  cardLanguage: TargetLanguage.CN_SIMPLE,
+  saveToDevice: true,
+  aspectRatio: '1:1' as const
 };

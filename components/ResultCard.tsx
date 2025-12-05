@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { SkyAnalysisResult, TargetLanguage, AppLanguage, FilterType } from '../types';
+import { SkyAnalysisResult, TargetLanguage, AppLanguage, FilterType, AppSettings } from '../types';
 import { LANGUAGES, UI_TEXT, PHOTO_FILTERS } from '../constants';
 import { Download, X, Globe, RefreshCw, Palette } from 'lucide-react';
 
@@ -9,6 +10,7 @@ interface ResultCardProps {
   onReprint: (newLang: TargetLanguage) => void;
   isReprinting: boolean;
   appLang: AppLanguage;
+  settings: AppSettings;
   initialFilter?: FilterType;
 }
 
@@ -18,6 +20,7 @@ const ResultCard: React.FC<ResultCardProps> = ({
   onReprint, 
   isReprinting, 
   appLang,
+  settings,
   initialFilter = FilterType.NATURAL 
 }) => {
   const t = UI_TEXT[appLang];
@@ -25,40 +28,65 @@ const ResultCard: React.FC<ResultCardProps> = ({
   const [showLanguageMenu, setShowLanguageMenu] = useState(false);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [currentFilter, setCurrentFilter] = useState<FilterType>(initialFilter);
+  const [imageAspectRatio, setImageAspectRatio] = useState(1); // Width / Height
   
   // Refs
   const filterMenuRef = useRef<HTMLDivElement>(null);
   const filterTriggerRef = useRef<HTMLDivElement>(null);
+  const languageMenuRef = useRef<HTMLDivElement>(null);
+  const languageTriggerRef = useRef<HTMLButtonElement>(null);
 
-  // Close filter menu when clicking outside
+  // Close menus when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      // If menu is closed, do nothing
-      if (!showFilterMenu) return;
+      const target = event.target as Node;
 
-      // If click is inside the menu or on the trigger, do nothing (trigger handles toggle)
-      if (
-        filterMenuRef.current && 
-        filterMenuRef.current.contains(event.target as Node)
-      ) {
-        return;
-      }
-      
-      if (
-        filterTriggerRef.current &&
-        filterTriggerRef.current.contains(event.target as Node)
-      ) {
-        return;
+      // Filter Menu Logic
+      if (showFilterMenu) {
+        if (filterMenuRef.current && !filterMenuRef.current.contains(target) &&
+            filterTriggerRef.current && !filterTriggerRef.current.contains(target)) {
+          setShowFilterMenu(false);
+        }
       }
 
-      setShowFilterMenu(false);
+      // Language Menu Logic
+      if (showLanguageMenu) {
+        if (languageMenuRef.current && !languageMenuRef.current.contains(target) &&
+            languageTriggerRef.current && !languageTriggerRef.current.contains(target)) {
+          setShowLanguageMenu(false);
+        }
+      }
     };
-
     document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showFilterMenu]);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showFilterMenu, showLanguageMenu]);
+
+  // Load Image Ratio
+  useEffect(() => {
+    if (data.imageUrl) {
+        const img = new Image();
+        img.src = data.imageUrl;
+        img.onload = () => {
+            const ratio = img.naturalWidth / img.naturalHeight;
+            setImageAspectRatio(ratio);
+        };
+    }
+  }, [data.imageUrl]);
+
+  // Calculate Display Ratio based on Settings
+  const getDisplayHeightStyle = (baseWidth: number) => {
+      if (settings.aspectRatio === '1:1') return { height: `${baseWidth}px` };
+      
+      // Dynamic Logic
+      // Max 9:16 (Tall) -> Ratio 0.5625 -> Height = Width / 0.5625
+      // Min 3:2 (Wide) -> Ratio 1.5 -> Height = Width / 1.5
+      
+      let effectiveRatio = imageAspectRatio;
+      if (effectiveRatio < 0.5625) effectiveRatio = 0.5625; // Don't get taller than 9:16
+      if (effectiveRatio > 1.5) effectiveRatio = 1.5; // Don't get wider than 3:2
+      
+      return { height: `${baseWidth / effectiveRatio}px` };
+  };
 
   // Format poetry with smart line breaks
   const formatPoetry = (text: string) => {
@@ -71,7 +99,6 @@ const ResultCard: React.FC<ResultCardProps> = ({
   const [detailsText, setDetailsText] = useState(data.proverb);
   const [titleText, setTitleText] = useState(data.scientificName);
 
-  // Update local state when data changes (e.g. after reprint)
   useEffect(() => {
     setPoeticText(formatPoetry(data.poeticExpression));
     setDateText(new Date(data.timestamp).toLocaleDateString());
@@ -84,9 +111,9 @@ const ResultCard: React.FC<ResultCardProps> = ({
   useEffect(() => {
     const handleResize = () => {
         const CARD_WIDTH = 340;
-        const CARD_HEIGHT = 640; 
+        const CARD_HEIGHT_ESTIMATE = 680; 
         const widthScale = window.innerWidth / (CARD_WIDTH + 40);
-        const heightScale = (window.innerHeight - 150) / CARD_HEIGHT;
+        const heightScale = (window.innerHeight - 150) / CARD_HEIGHT_ESTIMATE;
         
         let newScale = Math.min(widthScale, heightScale);
         if (newScale > 1) newScale = 1;
@@ -111,13 +138,30 @@ const ResultCard: React.FC<ResultCardProps> = ({
       container.style.zIndex = '-1';
       document.body.appendChild(container);
 
+      const CARD_WIDTH = 375;
+
       const card = document.createElement('div');
       card.className = "bg-[#fdfbf7] p-8 shadow-none flex flex-col items-center";
-      card.style.width = "375px"; 
-      card.style.minHeight = "600px";
+      card.style.width = `${CARD_WIDTH}px`; 
+      // Height is auto
       
       const imgContainer = document.createElement('div');
-      imgContainer.className = `aspect-square w-full bg-slate-100 relative overflow-hidden mb-8 ${PHOTO_FILTERS[currentFilter].style}`;
+      // Apply aspect ratio style logic here
+      let imgHeight = CARD_WIDTH; // Default 1:1
+      if (settings.aspectRatio === 'dynamic') {
+         let effectiveRatio = imageAspectRatio;
+         if (effectiveRatio < 0.5625) effectiveRatio = 0.5625; 
+         if (effectiveRatio > 1.5) effectiveRatio = 1.5; 
+         imgHeight = CARD_WIDTH / effectiveRatio;
+      }
+      
+      imgContainer.style.height = `${imgHeight}px`;
+      imgContainer.style.width = '100%';
+      // Add the Tailwind filter classes. 
+      // Note: html2canvas sometimes struggles with Tailwind classes if styles aren't fully computed.
+      // But usually it works. Just to be safe, we add them.
+      imgContainer.className = `bg-slate-100 relative overflow-hidden mb-8 ${PHOTO_FILTERS[currentFilter].style}`;
+      
       if (data.imageUrl) {
           const img = document.createElement('img');
           img.src = data.imageUrl;
@@ -125,7 +169,9 @@ const ResultCard: React.FC<ResultCardProps> = ({
           img.crossOrigin = "anonymous";
           imgContainer.appendChild(img);
       }
-      // Overlays for texture
+      
+      // We remove complex blend mode overlays for export as html2canvas often fails them.
+      // Or we can try a simple overlay.
       const overlay1 = document.createElement('div');
       overlay1.className = "absolute inset-0 bg-gradient-to-tr from-orange-500/10 to-blue-500/10 mix-blend-overlay pointer-events-none";
       imgContainer.appendChild(overlay1);
@@ -179,6 +225,7 @@ const ResultCard: React.FC<ResultCardProps> = ({
         scale: 3, 
         logging: false,
         useCORS: true,
+        allowTaint: true, // Important for some filter effects
       });
 
       document.body.removeChild(container);
@@ -221,7 +268,8 @@ const ResultCard: React.FC<ResultCardProps> = ({
             {/* Image Section - Clickable for Filters */}
             <div 
               ref={filterTriggerRef}
-              className={`aspect-square w-full bg-slate-100 relative overflow-hidden mb-6 shadow-inner cursor-pointer group transition-all duration-500 ${PHOTO_FILTERS[currentFilter].style}`}
+              style={getDisplayHeightStyle(300)} // 340px padding 20px*2 = 300px width
+              className={`w-full bg-slate-100 relative overflow-hidden mb-6 shadow-inner cursor-pointer group transition-all duration-500 ${PHOTO_FILTERS[currentFilter].style}`}
               onClick={() => setShowFilterMenu(!showFilterMenu)}
             >
                 {data.imageUrl && (
@@ -242,7 +290,7 @@ const ResultCard: React.FC<ResultCardProps> = ({
                 </div>
             </div>
 
-            {/* Filter Selection Menu (Absolute over the card image) */}
+            {/* Filter Selection Menu */}
             {showFilterMenu && (
                <div 
                  ref={filterMenuRef}
@@ -273,7 +321,7 @@ const ResultCard: React.FC<ResultCardProps> = ({
                     <textarea
                         value={poeticText}
                         onChange={(e) => setPoeticText(e.target.value)}
-                        className="w-full bg-transparent border-none outline-none text-[24px] leading-[1.4] font-handwriting text-slate-800 text-center resize-none overflow-hidden h-32 p-0 m-0"
+                        className="w-full bg-transparent border-none outline-none text-[24px] leading-[1.4] font-handwriting text-slate-800 text-center resize-none overflow-hidden h-40 p-0 m-0"
                         spellCheck={false}
                     />
                 </div>
@@ -328,7 +376,6 @@ const ResultCard: React.FC<ResultCardProps> = ({
                 </div>
             )}
             
-            {/* Helper Text for Filters has been removed */}
         </div>
 
         {/* Action Bar */}
@@ -345,6 +392,7 @@ const ResultCard: React.FC<ResultCardProps> = ({
 
             <div className="relative">
                 <button 
+                    ref={languageTriggerRef}
                     onClick={() => setShowLanguageMenu(!showLanguageMenu)}
                     className="flex items-center gap-2 px-6 py-3 rounded-full bg-white/5 hover:bg-white/20 text-white transition text-xs font-bold tracking-widest uppercase"
                     disabled={isReprinting}
@@ -354,7 +402,10 @@ const ResultCard: React.FC<ResultCardProps> = ({
                 </button>
 
                 {showLanguageMenu && (
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 w-48 bg-[#1a1a1a] border border-white/10 rounded-xl overflow-hidden shadow-2xl py-1">
+                    <div 
+                        ref={languageMenuRef}
+                        className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 w-48 bg-[#1a1a1a] border border-white/10 rounded-xl overflow-hidden shadow-2xl py-1"
+                    >
                         {LANGUAGES.map(lang => (
                             <button
                                 key={lang.code}

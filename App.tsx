@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import HomeView from './components/HomeView';
 import CameraView from './components/CameraView';
@@ -32,11 +33,18 @@ const App: React.FC = () => {
         setJournal(JSON.parse(savedJournal));
       } catch (e) { console.error("Failed to load journal", e); }
     }
-    // Load settings
+    // Load settings with migration
     const savedSettings = localStorage.getItem('skystory_settings');
     if (savedSettings) {
       try {
-        setSettings(JSON.parse(savedSettings));
+        const parsed = JSON.parse(savedSettings);
+        // Migration: Map defaultFilmStock to cardLanguage if it exists and cardLanguage doesn't
+        const merged: AppSettings = {
+            ...DEFAULT_SETTINGS,
+            ...parsed,
+            cardLanguage: parsed.cardLanguage || parsed.defaultFilmStock || DEFAULT_SETTINGS.cardLanguage
+        };
+        setSettings(merged);
       } catch (e) { console.error("Failed to load settings", e); }
     }
   }, []);
@@ -97,7 +105,7 @@ const App: React.FC = () => {
 
       // 3. Process in background
       try {
-        const result = await analyzeSkyImage(base64Data, settings.defaultFilmStock, mode);
+        const result = await analyzeSkyImage(base64Data, settings.cardLanguage, mode);
         
         // 4. Update Entry to Completed
         setJournal(prev => {
@@ -193,6 +201,7 @@ const App: React.FC = () => {
           onReprint={handleReprint}
           isReprinting={reprinting}
           appLang={settings.appLanguage}
+          settings={settings}
         />
       )}
 

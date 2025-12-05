@@ -1,3 +1,4 @@
+
 export enum AppView {
   HOME = 'HOME',
   CAMERA = 'CAMERA',
@@ -14,7 +15,8 @@ export enum SkyMode {
 // Language for the Generated Content (Poetry)
 export enum TargetLanguage {
   EN = 'English',
-  CN = '中文',
+  CN = '中文', // Traditional
+  CN_SIMPLE = '简体中文', // Simplified
   JP = '日本語',
   FR = 'Français',
   KR = '한국어',
@@ -58,6 +60,7 @@ export interface JournalEntry extends Partial<SkyAnalysisResult> {
 
 export interface AppSettings {
   appLanguage: AppLanguage;
-  defaultFilmStock: TargetLanguage;
+  cardLanguage: TargetLanguage; // Renamed from defaultFilmStock
   saveToDevice: boolean;
+  aspectRatio: '1:1' | 'dynamic';
 }

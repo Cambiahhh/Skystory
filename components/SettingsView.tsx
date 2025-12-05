@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { X, Globe, Smartphone } from 'lucide-react';
+import { X, Globe, Smartphone, Ratio } from 'lucide-react';
 import { AppSettings, TargetLanguage, AppLanguage } from '../types';
 import { LANGUAGES, UI_LANGUAGES, UI_TEXT } from '../constants';
 
@@ -13,12 +14,16 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSettings,
   
   const t = UI_TEXT[settings.appLanguage];
 
-  const handleFilmStockChange = (lang: TargetLanguage) => {
-    onUpdateSettings({ ...settings, defaultFilmStock: lang });
+  const handleCardLanguageChange = (lang: TargetLanguage) => {
+    onUpdateSettings({ ...settings, cardLanguage: lang });
   };
 
   const handleAppLangChange = (lang: AppLanguage) => {
     onUpdateSettings({ ...settings, appLanguage: lang });
+  };
+
+  const handleAspectRatioChange = (ratio: '1:1' | 'dynamic') => {
+    onUpdateSettings({ ...settings, aspectRatio: ratio });
   };
 
   return (
@@ -60,20 +65,51 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSettings,
             </div>
         </div>
 
-        {/* Content Language Section */}
+        {/* Aspect Ratio Section */}
+        <div className="mb-8">
+            <div className="flex items-center gap-2 mb-4 text-white/70">
+                <Ratio size={16} />
+                <span className="text-xs uppercase tracking-widest font-serif-text">{t.aspectRatio}</span>
+            </div>
+            
+            <div className="flex gap-3">
+                <button
+                    onClick={() => handleAspectRatioChange('1:1')}
+                    className={`flex-1 px-4 py-3 rounded-lg border text-sm transition-all text-center ${
+                        settings.aspectRatio === '1:1'
+                        ? 'border-white/60 bg-white/10 text-white' 
+                        : 'border-white/10 hover:border-white/30 text-white/40'
+                    }`}
+                >
+                    {t.aspectRatioOpts.square}
+                </button>
+                <button
+                    onClick={() => handleAspectRatioChange('dynamic')}
+                    className={`flex-1 px-4 py-3 rounded-lg border text-sm transition-all text-center ${
+                        settings.aspectRatio === 'dynamic'
+                        ? 'border-white/60 bg-white/10 text-white' 
+                        : 'border-white/10 hover:border-white/30 text-white/40'
+                    }`}
+                >
+                    {t.aspectRatioOpts.dynamic}
+                </button>
+            </div>
+        </div>
+
+        {/* Card Language Section */}
         <div className="mb-8">
             <div className="flex items-center gap-2 mb-4 text-white/70">
                 <Globe size={16} />
-                <span className="text-xs uppercase tracking-widest font-serif-text">{t.filmStock}</span>
+                <span className="text-xs uppercase tracking-widest font-serif-text">{t.cardLang}</span>
             </div>
             
             <div className="grid grid-cols-2 gap-3">
                 {LANGUAGES.map((lang) => (
                     <button
                         key={lang.code}
-                        onClick={() => handleFilmStockChange(lang.code)}
+                        onClick={() => handleCardLanguageChange(lang.code)}
                         className={`px-4 py-3 rounded-lg border text-sm transition-all text-left ${
-                            settings.defaultFilmStock === lang.code 
+                            settings.cardLanguage === lang.code 
                             ? 'border-white/60 bg-white/10 text-white' 
                             : 'border-white/10 hover:border-white/30 text-white/40'
                         }`}
@@ -88,7 +124,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSettings,
         {/* Footer */}
         <div className="mt-8 pt-6 border-t border-white/10 text-center">
              <p className="text-[10px] text-white/30 font-mono">
-                 SkyStory v1.1.0 &middot; Built with Gemini
+                 SkyStory v1.2.0 &middot; Built with Gemini
              </p>
         </div>
 
