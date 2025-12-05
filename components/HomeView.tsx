@@ -130,23 +130,24 @@ const HomeView: React.FC<HomeViewProps> = ({ onSelectMode, onOpenJournal, onOpen
         {/* Floating Dock (The Island) */}
         <div className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#111]/80 backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)]">
             
+            {/* Philosophy Button (Swapped) */}
+            <button 
+                onClick={() => setShowPhilosophy(true)}
+                className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 text-white/40 hover:text-white transition-all group relative"
+            >
+                <Feather size={18} strokeWidth={1.5} />
+                <span className="absolute -top-8 text-[9px] bg-white/10 text-white px-2 py-0.5 rounded backdrop-blur opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">Letter</span>
+            </button>
+
+            <div className="w-[1px] h-4 bg-white/10"></div>
+
+            {/* Journal Button (Swapped) */}
             <button 
                 onClick={onOpenJournal}
                 className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 text-white/40 hover:text-white transition-all group relative"
             >
                 <BookOpen size={18} strokeWidth={1.5} />
                 <span className="absolute -top-8 text-[9px] bg-white/10 text-white px-2 py-0.5 rounded backdrop-blur opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">Journal</span>
-            </button>
-
-            <div className="w-[1px] h-4 bg-white/10"></div>
-
-             {/* Philosophy Button */}
-             <button 
-                onClick={() => setShowPhilosophy(true)}
-                className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 text-white/40 hover:text-white transition-all group relative"
-            >
-                <Feather size={18} strokeWidth={1.5} />
-                <span className="absolute -top-8 text-[9px] bg-white/10 text-white px-2 py-0.5 rounded backdrop-blur opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">Letter</span>
             </button>
 
             <div className="w-[1px] h-4 bg-white/10"></div>

@@ -1,5 +1,5 @@
 
-import { TargetLanguage, AppLanguage, FilterType } from './types';
+import { TargetLanguage, AppLanguage, FilterType, AspectRatio } from './types';
 
 export const GEMINI_MODEL = 'gemini-2.5-flash';
 
@@ -28,13 +28,38 @@ export const UI_LANGUAGES = [
   { code: AppLanguage.CN, label: '简体中文' },
 ];
 
+// Added 'css' property for html2canvas compatibility
 export const PHOTO_FILTERS = {
-  [FilterType.ORIGINAL]: { name: "Original", style: "" },
-  [FilterType.NATURAL]: { name: "Hasselblad X", style: "contrast-[1.05] saturate-[0.9] sepia-[0.1]" },
-  [FilterType.VIVID]: { name: "Vivid Color", style: "contrast-[1.1] saturate-[1.3] brightness-[1.05]" },
-  [FilterType.MONO]: { name: "Tri-X 400", style: "grayscale-[1] contrast-[1.2] brightness-[0.95]" },
-  [FilterType.MOON]: { name: "Moonlight", style: "saturate-[0.6] hue-rotate-[190deg] contrast-[1.1] brightness-[0.9]" },
-  [FilterType.SUN]: { name: "Sunlight", style: "sepia-[0.3] saturate-[1.1] contrast-[1.05] brightness-[1.05]" },
+  [FilterType.ORIGINAL]: { 
+    name: "Original", 
+    style: "", 
+    css: "none" 
+  },
+  [FilterType.NATURAL]: { 
+    name: "Hasselblad X", 
+    style: "contrast-[1.05] saturate-[0.9] sepia-[0.1]", 
+    css: "contrast(1.05) saturate(0.9) sepia(0.1)" 
+  },
+  [FilterType.VIVID]: { 
+    name: "Vivid Color", 
+    style: "contrast-[1.1] saturate-[1.3] brightness-[1.05]", 
+    css: "contrast(1.1) saturate(1.3) brightness(1.05)" 
+  },
+  [FilterType.MONO]: { 
+    name: "Tri-X 400", 
+    style: "grayscale-[1] contrast-[1.2] brightness-[0.95]", 
+    css: "grayscale(1) contrast(1.2) brightness(0.95)" 
+  },
+  [FilterType.MOON]: { 
+    name: "Moonlight", 
+    style: "saturate-[0.6] hue-rotate-[190deg] contrast-[1.1] brightness-[0.9]", 
+    css: "saturate(0.6) hue-rotate(190deg) contrast(1.1) brightness(0.9)" 
+  },
+  [FilterType.SUN]: { 
+    name: "Sunlight", 
+    style: "sepia-[0.3] saturate-[1.1] contrast-[1.05] brightness-[1.05]", 
+    css: "sepia(0.3) saturate(1.1) contrast(1.05) brightness(1.05)" 
+  },
 };
 
 export const UI_TEXT = {
@@ -48,8 +73,11 @@ export const UI_TEXT = {
     cardLang: "Card Language",
     aspectRatio: "Photo Ratio",
     aspectRatioOpts: {
-      square: "1:1 Square",
-      dynamic: "Dynamic"
+      '1:1': "1:1",
+      '2:3': "2:3",
+      '3:4': "3:4",
+      '4:3': "4:3",
+      '3:2': "3:2"
     },
     save: "Save",
     reprint: "Reprint",
@@ -91,8 +119,11 @@ export const UI_TEXT = {
     cardLang: "卡片语言",
     aspectRatio: "图片比例",
     aspectRatioOpts: {
-      square: "1:1 方形",
-      dynamic: "动态 (全景/竖屏)"
+      '1:1': "1:1 方形",
+      '2:3': "2:3 竖幅",
+      '3:4': "3:4 竖幅",
+      '4:3': "4:3 横幅",
+      '3:2': "3:2 横幅"
     },
     save: "保存",
     reprint: "重印/翻译",
@@ -130,5 +161,5 @@ export const DEFAULT_SETTINGS = {
   appLanguage: AppLanguage.CN,
   cardLanguage: TargetLanguage.CN_SIMPLE,
   saveToDevice: true,
-  aspectRatio: '1:1' as const
+  aspectRatio: '1:1' as AspectRatio
 };

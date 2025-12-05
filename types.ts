@@ -58,9 +58,11 @@ export interface JournalEntry extends Partial<SkyAnalysisResult> {
   filter?: FilterType; // Saved filter choice
 }
 
+export type AspectRatio = '2:3' | '3:4' | '1:1' | '4:3' | '3:2';
+
 export interface AppSettings {
   appLanguage: AppLanguage;
   cardLanguage: TargetLanguage; // Renamed from defaultFilmStock
   saveToDevice: boolean;
-  aspectRatio: '1:1' | 'dynamic';
+  aspectRatio: AspectRatio;
 }

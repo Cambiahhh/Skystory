@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { X, Globe, Smartphone, Ratio } from 'lucide-react';
-import { AppSettings, TargetLanguage, AppLanguage } from '../types';
+import { AppSettings, TargetLanguage, AppLanguage, AspectRatio } from '../types';
 import { LANGUAGES, UI_LANGUAGES, UI_TEXT } from '../constants';
 
 interface SettingsViewProps {
@@ -22,9 +22,11 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSettings,
     onUpdateSettings({ ...settings, appLanguage: lang });
   };
 
-  const handleAspectRatioChange = (ratio: '1:1' | 'dynamic') => {
+  const handleAspectRatioChange = (ratio: AspectRatio) => {
     onUpdateSettings({ ...settings, aspectRatio: ratio });
   };
+
+  const aspectRatios: AspectRatio[] = ['1:1', '2:3', '3:4', '4:3', '3:2'];
 
   return (
     <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in duration-300">
@@ -41,22 +43,22 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSettings,
             {t.settings}
         </h2>
 
-        {/* App Language Section */}
+        {/* App Language Section - Toggle Style */}
         <div className="mb-8">
             <div className="flex items-center gap-2 mb-4 text-white/70">
                 <Smartphone size={16} />
                 <span className="text-xs uppercase tracking-widest font-serif-text">{t.appLang}</span>
             </div>
             
-            <div className="flex gap-3">
+            <div className="flex gap-2 p-1 bg-white/5 rounded-lg border border-white/10">
                 {UI_LANGUAGES.map((lang) => (
                     <button
                         key={lang.code}
                         onClick={() => handleAppLangChange(lang.code)}
-                        className={`flex-1 px-4 py-3 rounded-lg border text-sm transition-all text-center ${
+                        className={`flex-1 px-4 py-2 rounded-md text-xs font-bold tracking-wider uppercase transition-all ${
                             settings.appLanguage === lang.code 
-                            ? 'border-white/60 bg-white/10 text-white' 
-                            : 'border-white/10 hover:border-white/30 text-white/40'
+                            ? 'bg-white/10 text-white shadow-sm' 
+                            : 'text-white/30 hover:text-white/60'
                         }`}
                     >
                         {lang.label}
@@ -65,7 +67,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSettings,
             </div>
         </div>
 
-        {/* Default Photo Ratio Section - Slider Style */}
+        {/* Default Photo Ratio Section - Horizontal Scroll */}
         <div className="mb-8">
             <div className="flex items-center gap-2 mb-4 text-white/70">
                 <Ratio size={16} />
@@ -74,63 +76,58 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSettings,
                 </span>
             </div>
             
-            {/* Slider Container */}
-            <div className="bg-white/5 rounded-lg p-1 flex relative">
-                {/* Sliding Highlight */}
-                <div 
-                    className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white/10 rounded-md transition-all duration-300 ease-out border border-white/20 shadow-lg ${
-                        settings.aspectRatio === 'dynamic' ? 'translate-x-[calc(100%+4px)]' : 'translate-x-0'
-                    }`}
-                ></div>
-
-                <button
-                    onClick={() => handleAspectRatioChange('1:1')}
-                    className={`flex-1 py-3 text-sm z-10 transition-colors ${
-                        settings.aspectRatio === '1:1' ? 'text-white' : 'text-white/40'
-                    }`}
-                >
-                    {t.aspectRatioOpts.square}
-                </button>
-                <button
-                    onClick={() => handleAspectRatioChange('dynamic')}
-                    className={`flex-1 py-3 text-sm z-10 transition-colors ${
-                        settings.aspectRatio === 'dynamic' ? 'text-white' : 'text-white/40'
-                    }`}
-                >
-                    {t.aspectRatioOpts.dynamic}
-                </button>
+            <div className="w-full overflow-x-auto pb-2 no-scrollbar">
+                <div className="flex gap-2 w-max px-1">
+                    {aspectRatios.map((ratio) => (
+                        <button
+                            key={ratio}
+                            onClick={() => handleAspectRatioChange(ratio)}
+                            className={`px-4 py-2.5 rounded-lg border text-xs font-bold tracking-wider uppercase transition-all whitespace-nowrap ${
+                                settings.aspectRatio === ratio 
+                                ? 'border-white/60 bg-white/10 text-white' 
+                                : 'border-white/10 bg-white/5 text-white/40 hover:border-white/20'
+                            }`}
+                        >
+                            {t.aspectRatioOpts[ratio]}
+                        </button>
+                    ))}
+                </div>
             </div>
         </div>
 
-        {/* Card Language Section */}
+        {/* Card Language Section - Horizontal Scroll (Slide to Select) */}
         <div className="mb-8">
             <div className="flex items-center gap-2 mb-4 text-white/70">
                 <Globe size={16} />
                 <span className="text-xs uppercase tracking-widest font-serif-text">{t.cardLang}</span>
             </div>
             
-            <div className="grid grid-cols-2 gap-3">
-                {LANGUAGES.map((lang) => (
-                    <button
-                        key={lang.code}
-                        onClick={() => handleCardLanguageChange(lang.code)}
-                        className={`px-4 py-3 rounded-lg border text-sm transition-all text-left ${
-                            settings.cardLanguage === lang.code 
-                            ? 'border-white/60 bg-white/10 text-white' 
-                            : 'border-white/10 hover:border-white/30 text-white/40'
-                        }`}
-                    >
-                        <span className="block font-serif-display text-xs mb-1">{lang.flag}</span>
-                        {lang.label.replace('Film: ', '')}
-                    </button>
-                ))}
+            <div className="w-full overflow-x-auto pb-4 no-scrollbar">
+                <div className="flex gap-3 w-max px-1">
+                    {LANGUAGES.map((lang) => (
+                        <button
+                            key={lang.code}
+                            onClick={() => handleCardLanguageChange(lang.code)}
+                            className={`flex flex-col items-center justify-center min-w-[80px] px-3 py-3 rounded-xl border transition-all ${
+                                settings.cardLanguage === lang.code 
+                                ? 'border-white/60 bg-white/10 text-white shadow-[0_0_15px_rgba(255,255,255,0.1)]' 
+                                : 'border-white/5 bg-white/5 text-white/40 hover:border-white/20 hover:text-white/70'
+                            }`}
+                        >
+                            <span className="font-serif-display text-lg mb-1">{lang.flag}</span>
+                            <span className="text-[9px] uppercase tracking-wider whitespace-nowrap">
+                                {lang.label.replace('Film: ', '')}
+                            </span>
+                        </button>
+                    ))}
+                </div>
             </div>
         </div>
 
         {/* Footer */}
         <div className="mt-8 pt-6 border-t border-white/10 text-center">
              <p className="text-[10px] text-white/30 font-mono">
-                 SkyStory v1.2.0 &middot; Built with Gemini
+                 SkyStory v1.3.0 &middot; Built with Gemini
              </p>
         </div>
 

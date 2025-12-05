@@ -1,7 +1,7 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { JournalEntry, AppLanguage } from '../types';
-import { X, Aperture, AlertCircle, Loader2, Trash2 } from 'lucide-react';
+import { X, Aperture, AlertCircle, Loader2, Trash2, AlertTriangle } from 'lucide-react';
 import { UI_TEXT } from '../constants';
 
 interface SkyJournalProps {
@@ -14,6 +14,14 @@ interface SkyJournalProps {
 
 const SkyJournal: React.FC<SkyJournalProps> = ({ entries, onClose, onSelectEntry, onDeleteEntry, appLang }) => {
   const t = UI_TEXT[appLang];
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  const confirmDelete = () => {
+    if (deleteConfirmId) {
+      onDeleteEntry(deleteConfirmId);
+      setDeleteConfirmId(null);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-40 bg-[#0a0a0a] overflow-y-auto animate-in slide-in-from-bottom-10 duration-500 font-sans">
@@ -63,18 +71,16 @@ const SkyJournal: React.FC<SkyJournalProps> = ({ entries, onClose, onSelectEntry
                   </div>
                 )}
                 
-                {/* Delete Button - Enhanced hit area and event handling */}
+                {/* Delete Button */}
                 <button
                     onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
-                        onDeleteEntry(entry.id);
+                        setDeleteConfirmId(entry.id);
                     }}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onTouchStart={(e) => e.stopPropagation()}
-                    className="absolute top-0 right-0 z-40 p-3 opacity-0 group-hover:opacity-100 transition-all focus:opacity-100"
+                    className="absolute top-0 right-0 z-30 p-3 opacity-0 group-hover:opacity-100 transition-all focus:opacity-100"
                 >
-                    <div className="bg-black/50 hover:bg-red-500 text-white rounded-full p-1.5 backdrop-blur-sm">
+                    <div className="bg-black/50 hover:bg-red-500 text-white rounded-full p-1.5 backdrop-blur-sm shadow-sm">
                         <Trash2 size={12} />
                     </div>
                 </button>
@@ -112,6 +118,45 @@ const SkyJournal: React.FC<SkyJournalProps> = ({ entries, onClose, onSelectEntry
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+           <div className="bg-[#1a1a1a] border border-white/10 p-6 rounded-2xl w-full max-w-xs shadow-2xl transform scale-100 transition-all">
+              <div className="flex flex-col items-center text-center gap-4">
+                  <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center text-red-500 mb-2">
+                      <AlertTriangle size={24} />
+                  </div>
+                  
+                  <h3 className="text-white font-serif-display tracking-widest uppercase text-lg">
+                      {appLang === 'CN' ? '确认删除?' : 'Delete Memory?'}
+                  </h3>
+                  
+                  <p className="text-white/50 text-xs leading-relaxed">
+                      {appLang === 'CN' 
+                        ? '这张天空的记忆将被永久删除，无法找回。' 
+                        : 'This sky memory will be permanently deleted. This action cannot be undone.'}
+                  </p>
+
+                  <div className="flex gap-3 w-full mt-2">
+                      <button 
+                        onClick={() => setDeleteConfirmId(null)}
+                        className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold tracking-wider uppercase transition"
+                      >
+                          {appLang === 'CN' ? '取消' : 'Cancel'}
+                      </button>
+                      <button 
+                        onClick={confirmDelete}
+                        className="flex-1 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white text-xs font-bold tracking-wider uppercase transition shadow-lg shadow-red-500/20"
+                      >
+                          {appLang === 'CN' ? '删除' : 'Delete'}
+                      </button>
+                  </div>
+              </div>
+           </div>
+        </div>
+      )}
+
     </div>
   );
 };
