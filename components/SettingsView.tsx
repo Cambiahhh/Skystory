@@ -65,30 +65,36 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSettings,
             </div>
         </div>
 
-        {/* Aspect Ratio Section */}
+        {/* Default Photo Ratio Section - Slider Style */}
         <div className="mb-8">
             <div className="flex items-center gap-2 mb-4 text-white/70">
                 <Ratio size={16} />
-                <span className="text-xs uppercase tracking-widest font-serif-text">{t.aspectRatio}</span>
+                <span className="text-xs uppercase tracking-widest font-serif-text">
+                  {settings.appLanguage === 'CN' ? '照片默认比例' : 'Default Photo Ratio'}
+                </span>
             </div>
             
-            <div className="flex gap-3">
+            {/* Slider Container */}
+            <div className="bg-white/5 rounded-lg p-1 flex relative">
+                {/* Sliding Highlight */}
+                <div 
+                    className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white/10 rounded-md transition-all duration-300 ease-out border border-white/20 shadow-lg ${
+                        settings.aspectRatio === 'dynamic' ? 'translate-x-[calc(100%+4px)]' : 'translate-x-0'
+                    }`}
+                ></div>
+
                 <button
                     onClick={() => handleAspectRatioChange('1:1')}
-                    className={`flex-1 px-4 py-3 rounded-lg border text-sm transition-all text-center ${
-                        settings.aspectRatio === '1:1'
-                        ? 'border-white/60 bg-white/10 text-white' 
-                        : 'border-white/10 hover:border-white/30 text-white/40'
+                    className={`flex-1 py-3 text-sm z-10 transition-colors ${
+                        settings.aspectRatio === '1:1' ? 'text-white' : 'text-white/40'
                     }`}
                 >
                     {t.aspectRatioOpts.square}
                 </button>
                 <button
                     onClick={() => handleAspectRatioChange('dynamic')}
-                    className={`flex-1 px-4 py-3 rounded-lg border text-sm transition-all text-center ${
-                        settings.aspectRatio === 'dynamic'
-                        ? 'border-white/60 bg-white/10 text-white' 
-                        : 'border-white/10 hover:border-white/30 text-white/40'
+                    className={`flex-1 py-3 text-sm z-10 transition-colors ${
+                        settings.aspectRatio === 'dynamic' ? 'text-white' : 'text-white/40'
                     }`}
                 >
                     {t.aspectRatioOpts.dynamic}

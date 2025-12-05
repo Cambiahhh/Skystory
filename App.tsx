@@ -171,6 +171,17 @@ const App: React.FC = () => {
     }
   };
 
+  // Delete Logic
+  const handleDeleteEntry = (id: string) => {
+    if (confirm(settings.appLanguage === 'CN' ? '确定要删除这张记忆吗？' : 'Delete this memory?')) {
+      setJournal(prev => {
+        const updated = prev.filter(entry => entry.id !== id);
+        localStorage.setItem('skystory_journal', JSON.stringify(updated));
+        return updated;
+      });
+    }
+  };
+
   return (
     <div className="h-full w-full relative bg-black font-sans">
       
@@ -211,12 +222,12 @@ const App: React.FC = () => {
           onClose={handleBackToHome} 
           onSelectEntry={(entry) => {
             const { id, status, filter, ...rest } = entry;
-            // Need to reconstruct SkyAnalysisResult from JournalEntry (which is partial)
             if (rest.imageUrl && rest.poeticExpression) {
                 setCurrentResult(rest as SkyAnalysisResult);
                 setCurrentView(AppView.RESULT);
             }
           }}
+          onDeleteEntry={handleDeleteEntry}
           appLang={settings.appLanguage}
         />
       )}

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SkyAnalysisResult, TargetLanguage, AppLanguage, FilterType, AppSettings } from '../types';
 import { LANGUAGES, UI_TEXT, PHOTO_FILTERS } from '../constants';
-import { Download, X, Globe, RefreshCw, Palette } from 'lucide-react';
+import { Download, X, Globe, RefreshCw, Scan } from 'lucide-react';
 
 interface ResultCardProps {
   data: SkyAnalysisResult;
@@ -26,30 +26,27 @@ const ResultCard: React.FC<ResultCardProps> = ({
   const t = UI_TEXT[appLang];
   const [isMounted, setIsMounted] = useState(false);
   const [showLanguageMenu, setShowLanguageMenu] = useState(false);
-  const [showFilterMenu, setShowFilterMenu] = useState(false);
+  
+  // State for visual adjustments
   const [currentFilter, setCurrentFilter] = useState<FilterType>(initialFilter);
+  const [localAspectRatio, setLocalAspectRatio] = useState<'1:1' | 'dynamic'>(settings.aspectRatio);
   const [imageAspectRatio, setImageAspectRatio] = useState(1); // Width / Height
   
+  // Interaction State
+  const [feedbackLabel, setFeedbackLabel] = useState<string | null>(null);
+
   // Refs
-  const filterMenuRef = useRef<HTMLDivElement>(null);
-  const filterTriggerRef = useRef<HTMLDivElement>(null);
   const languageMenuRef = useRef<HTMLDivElement>(null);
   const languageTriggerRef = useRef<HTMLButtonElement>(null);
+  const touchStartRef = useRef<{x: number, y: number} | null>(null);
+
+  // Constants for swiping
+  const FILTER_KEYS = Object.keys(PHOTO_FILTERS) as FilterType[];
 
   // Close menus when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
-
-      // Filter Menu Logic
-      if (showFilterMenu) {
-        if (filterMenuRef.current && !filterMenuRef.current.contains(target) &&
-            filterTriggerRef.current && !filterTriggerRef.current.contains(target)) {
-          setShowFilterMenu(false);
-        }
-      }
-
-      // Language Menu Logic
       if (showLanguageMenu) {
         if (languageMenuRef.current && !languageMenuRef.current.contains(target) &&
             languageTriggerRef.current && !languageTriggerRef.current.contains(target)) {
@@ -59,7 +56,7 @@ const ResultCard: React.FC<ResultCardProps> = ({
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showFilterMenu, showLanguageMenu]);
+  }, [showLanguageMenu]);
 
   // Load Image Ratio
   useEffect(() => {
@@ -73,19 +70,67 @@ const ResultCard: React.FC<ResultCardProps> = ({
     }
   }, [data.imageUrl]);
 
-  // Calculate Display Ratio based on Settings
+  // Calculate Display Ratio based on Local State
   const getDisplayHeightStyle = (baseWidth: number) => {
-      if (settings.aspectRatio === '1:1') return { height: `${baseWidth}px` };
+      if (localAspectRatio === '1:1') return { height: `${baseWidth}px` };
       
       // Dynamic Logic
-      // Max 9:16 (Tall) -> Ratio 0.5625 -> Height = Width / 0.5625
-      // Min 3:2 (Wide) -> Ratio 1.5 -> Height = Width / 1.5
-      
       let effectiveRatio = imageAspectRatio;
       if (effectiveRatio < 0.5625) effectiveRatio = 0.5625; // Don't get taller than 9:16
       if (effectiveRatio > 1.5) effectiveRatio = 1.5; // Don't get wider than 3:2
       
       return { height: `${baseWidth / effectiveRatio}px` };
+  };
+
+  // Touch Handlers for Swipe
+  const handleTouchStart = (e: React.TouchEvent) => {
+      touchStartRef.current = {
+          x: e.touches[0].clientX,
+          y: e.touches[0].clientY
+      };
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+      if (!touchStartRef.current) return;
+      
+      const endX = e.changedTouches[0].clientX;
+      const endY = e.changedTouches[0].clientY;
+      const diffX = touchStartRef.current.x - endX;
+      const diffY = touchStartRef.current.y - endY;
+
+      // Threshold for swipe
+      const SWIPE_THRESHOLD = 30; 
+
+      if (Math.abs(diffX) > Math.abs(diffY)) {
+          // Horizontal Swipe -> Change Aspect Ratio
+          if (Math.abs(diffX) > SWIPE_THRESHOLD) {
+              const newRatio = localAspectRatio === '1:1' ? 'dynamic' : '1:1';
+              setLocalAspectRatio(newRatio);
+              showFeedback(newRatio === '1:1' ? t.aspectRatioOpts.square : t.aspectRatioOpts.dynamic);
+          }
+      } else {
+          // Vertical Swipe -> Change Filter
+          if (Math.abs(diffY) > SWIPE_THRESHOLD) {
+              const currentIndex = FILTER_KEYS.indexOf(currentFilter);
+              let nextIndex;
+              if (diffY > 0) {
+                   // Swiped Down (drag down) -> Prev Filter
+                   nextIndex = (currentIndex - 1 + FILTER_KEYS.length) % FILTER_KEYS.length;
+              } else {
+                   // Swiped Up (drag up) -> Next Filter
+                   nextIndex = (currentIndex + 1) % FILTER_KEYS.length;
+              }
+              const nextFilter = FILTER_KEYS[nextIndex];
+              setCurrentFilter(nextFilter);
+              showFeedback(t.filters[nextFilter]);
+          }
+      }
+      touchStartRef.current = null;
+  };
+
+  const showFeedback = (text: string) => {
+      setFeedbackLabel(text);
+      setTimeout(() => setFeedbackLabel(null), 1500);
   };
 
   // Format poetry with smart line breaks
@@ -127,6 +172,7 @@ const ResultCard: React.FC<ResultCardProps> = ({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // --- DOWNLOAD LOGIC ---
   const handleDownload = async () => {
     if (!(window as any).html2canvas) return;
 
@@ -138,43 +184,46 @@ const ResultCard: React.FC<ResultCardProps> = ({
       container.style.zIndex = '-1';
       document.body.appendChild(container);
 
-      const CARD_WIDTH = 375;
-
-      const card = document.createElement('div');
-      card.className = "bg-[#fdfbf7] p-8 shadow-none flex flex-col items-center";
-      card.style.width = `${CARD_WIDTH}px`; 
-      // Height is auto
-      
-      const imgContainer = document.createElement('div');
-      // Apply aspect ratio style logic here
+      const CARD_WIDTH = 375; 
+      // Calculate Image Height explicitly
       let imgHeight = CARD_WIDTH; // Default 1:1
-      if (settings.aspectRatio === 'dynamic') {
+      if (localAspectRatio === 'dynamic') {
          let effectiveRatio = imageAspectRatio;
          if (effectiveRatio < 0.5625) effectiveRatio = 0.5625; 
          if (effectiveRatio > 1.5) effectiveRatio = 1.5; 
          imgHeight = CARD_WIDTH / effectiveRatio;
       }
+
+      const card = document.createElement('div');
+      card.className = "bg-[#fdfbf7] p-8 shadow-none flex flex-col items-center";
+      card.style.width = `${CARD_WIDTH}px`; 
       
+      const imgContainer = document.createElement('div');
+      imgContainer.style.width = `${CARD_WIDTH - 64}px`; // 375 - 32px padding left - 32px padding right
       imgContainer.style.height = `${imgHeight}px`;
-      imgContainer.style.width = '100%';
-      // Add the Tailwind filter classes. 
-      // Note: html2canvas sometimes struggles with Tailwind classes if styles aren't fully computed.
-      // But usually it works. Just to be safe, we add them.
-      imgContainer.className = `bg-slate-100 relative overflow-hidden mb-8 ${PHOTO_FILTERS[currentFilter].style}`;
+      // We apply the filter class here, but also to the image to be safe
+      imgContainer.className = `bg-slate-100 relative overflow-hidden mb-8`;
       
       if (data.imageUrl) {
           const img = document.createElement('img');
           img.src = data.imageUrl;
-          img.className = "w-full h-full object-cover";
+          img.style.width = '100%';
+          img.style.height = '100%';
+          img.style.objectFit = 'cover';
+          // Apply filter directly to image for better html2canvas support
+          img.className = PHOTO_FILTERS[currentFilter].style;
           img.crossOrigin = "anonymous";
           imgContainer.appendChild(img);
       }
       
-      // We remove complex blend mode overlays for export as html2canvas often fails them.
-      // Or we can try a simple overlay.
+      // Overlays
       const overlay1 = document.createElement('div');
       overlay1.className = "absolute inset-0 bg-gradient-to-tr from-orange-500/10 to-blue-500/10 mix-blend-overlay pointer-events-none";
       imgContainer.appendChild(overlay1);
+
+      const overlay2 = document.createElement('div');
+      overlay2.className = "absolute inset-0 bg-black/5 mix-blend-multiply pointer-events-none";
+      imgContainer.appendChild(overlay2);
       
       card.appendChild(imgContainer);
 
@@ -218,14 +267,17 @@ const ResultCard: React.FC<ResultCardProps> = ({
       card.appendChild(content);
       container.appendChild(card);
 
-      await new Promise(resolve => setTimeout(resolve, 150));
+      // Wait for DOM
+      await new Promise(resolve => setTimeout(resolve, 200));
 
       const canvas = await (window as any).html2canvas(card, {
         backgroundColor: null,
         scale: 3, 
         logging: false,
         useCORS: true,
-        allowTaint: true, // Important for some filter effects
+        allowTaint: true,
+        width: CARD_WIDTH,
+        windowWidth: CARD_WIDTH + 100
       });
 
       document.body.removeChild(container);
@@ -265,53 +317,43 @@ const ResultCard: React.FC<ResultCardProps> = ({
                 className={`bg-[#fdfbf7] p-5 pb-8 w-[340px] shadow-2xl polaroid-shadow transition-all duration-500 flex flex-col items-center ${isReprinting ? 'blur-[2px] opacity-80 grayscale' : ''}`}
             >
             
-            {/* Image Section - Clickable for Filters */}
+            {/* Image Section - Gestures Enabled */}
             <div 
-              ref={filterTriggerRef}
-              style={getDisplayHeightStyle(300)} // 340px padding 20px*2 = 300px width
-              className={`w-full bg-slate-100 relative overflow-hidden mb-6 shadow-inner cursor-pointer group transition-all duration-500 ${PHOTO_FILTERS[currentFilter].style}`}
-              onClick={() => setShowFilterMenu(!showFilterMenu)}
+              style={{
+                  ...getDisplayHeightStyle(300),
+                  touchAction: 'none' // CRITICAL: Enables swipe gestures without scrolling page
+              }}
+              className={`w-full bg-slate-100 relative overflow-hidden mb-6 shadow-inner cursor-grab active:cursor-grabbing group transition-all duration-500 ${PHOTO_FILTERS[currentFilter].style}`}
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
             >
                 {data.imageUrl && (
                     <img 
                         src={data.imageUrl} 
                         alt="Sky" 
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover pointer-events-none select-none"
                         crossOrigin="anonymous" 
                     />
                 )}
+                
+                {/* Visual Feedback Overlay */}
+                <div className={`absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity duration-300 pointer-events-none ${feedbackLabel ? 'opacity-100' : 'opacity-0'}`}>
+                    <span className="text-white font-serif-display tracking-widest text-lg uppercase drop-shadow-lg border border-white/50 px-4 py-2 rounded-lg backdrop-blur-md">
+                        {feedbackLabel}
+                    </span>
+                </div>
+
                 {/* Texture */}
                 <div className="absolute inset-0 bg-gradient-to-tr from-orange-500/10 to-blue-500/10 mix-blend-overlay pointer-events-none"></div>
                 <div className="absolute inset-0 bg-black/5 mix-blend-multiply pointer-events-none"></div>
                 
                 {/* Hint */}
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20">
-                    <Palette className="text-white drop-shadow-md" size={32} />
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/10 pointer-events-none">
+                     <div className="flex gap-8 text-white/80">
+                         <Scan size={24} className="animate-pulse" />
+                     </div>
                 </div>
             </div>
-
-            {/* Filter Selection Menu */}
-            {showFilterMenu && (
-               <div 
-                 ref={filterMenuRef}
-                 className="absolute top-10 left-1/2 -translate-x-1/2 bg-black/90 backdrop-blur-md rounded-xl p-6 z-30 w-auto min-w-[280px] grid grid-cols-3 gap-x-6 gap-y-6 shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-200"
-               >
-                  {(Object.keys(PHOTO_FILTERS) as FilterType[]).map((fType) => (
-                    <button
-                      key={fType}
-                      onClick={() => { setCurrentFilter(fType); setShowFilterMenu(false); }}
-                      className={`flex flex-col items-center gap-2 ${currentFilter === fType ? 'opacity-100' : 'opacity-50 hover:opacity-100'}`}
-                    >
-                      <div className={`w-12 h-12 rounded-full bg-gray-200 overflow-hidden ring-2 transition-all duration-300 ${currentFilter === fType ? 'ring-white scale-110' : 'ring-transparent hover:ring-white/50'} ${PHOTO_FILTERS[fType].style}`}>
-                         {data.imageUrl && <img src={data.imageUrl} className="w-full h-full object-cover" />}
-                      </div>
-                      <span className="text-[10px] text-white tracking-wider text-center leading-tight whitespace-nowrap">
-                        {t.filters[fType]}
-                      </span>
-                    </button>
-                  ))}
-               </div>
-            )}
 
             {/* Content Section */}
             <div className="px-1 w-full flex flex-col items-center">
@@ -433,7 +475,7 @@ const ResultCard: React.FC<ResultCardProps> = ({
         </div>
         
         <p className="absolute bottom-24 text-white/30 text-[10px] font-mono tracking-widest uppercase pointer-events-none">
-            {t.tapToEdit}
+            Swipe Image: ↕ Filter &nbsp; ↔ Size
         </p>
 
       </div>

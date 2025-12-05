@@ -1,16 +1,18 @@
+
 import React from 'react';
 import { JournalEntry, AppLanguage } from '../types';
-import { X, Aperture, AlertCircle, Loader2 } from 'lucide-react';
+import { X, Aperture, AlertCircle, Loader2, Trash2 } from 'lucide-react';
 import { UI_TEXT } from '../constants';
 
 interface SkyJournalProps {
   entries: JournalEntry[];
   onClose: () => void;
   onSelectEntry: (entry: JournalEntry) => void;
+  onDeleteEntry: (id: string) => void;
   appLang: AppLanguage;
 }
 
-const SkyJournal: React.FC<SkyJournalProps> = ({ entries, onClose, onSelectEntry, appLang }) => {
+const SkyJournal: React.FC<SkyJournalProps> = ({ entries, onClose, onSelectEntry, onDeleteEntry, appLang }) => {
   const t = UI_TEXT[appLang];
 
   return (
@@ -50,7 +52,7 @@ const SkyJournal: React.FC<SkyJournalProps> = ({ entries, onClose, onSelectEntry
               <div 
                 key={entry.id}
                 onClick={() => entry.status === 'completed' && onSelectEntry(entry)}
-                className={`break-inside-avoid bg-white p-2 pb-4 shadow-xl rounded-[2px] relative overflow-hidden transition-all duration-300 ${entry.status === 'completed' ? 'cursor-pointer hover:rotate-1 hover:scale-[1.02]' : 'opacity-80'}`}
+                className={`break-inside-avoid bg-white p-2 pb-4 shadow-xl rounded-[2px] relative overflow-hidden transition-all duration-300 group ${entry.status === 'completed' ? 'cursor-pointer hover:rotate-1 hover:scale-[1.02]' : 'opacity-80'}`}
               >
                 
                 {/* Processing Overlay */}
@@ -60,6 +62,22 @@ const SkyJournal: React.FC<SkyJournalProps> = ({ entries, onClose, onSelectEntry
                     <span className="text-[9px] font-serif-display tracking-widest text-slate-800 uppercase bg-white/50 px-2 py-1 rounded-full">{t.developing}</span>
                   </div>
                 )}
+                
+                {/* Delete Button - Enhanced hit area and event handling */}
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        onDeleteEntry(entry.id);
+                    }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    className="absolute top-0 right-0 z-40 p-3 opacity-0 group-hover:opacity-100 transition-all focus:opacity-100"
+                >
+                    <div className="bg-black/50 hover:bg-red-500 text-white rounded-full p-1.5 backdrop-blur-sm">
+                        <Trash2 size={12} />
+                    </div>
+                </button>
 
                 <div className="aspect-square bg-gray-100 overflow-hidden mb-2 filter contrast-110 sepia-[0.1]">
                   {entry.imageUrl && (
