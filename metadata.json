@@ -1,0 +1,7 @@
+{
+  "name": "SkyStory",
+  "description": "Turn the sky into the most romantic language classroom. Identify clouds and stars with poetic translations.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
