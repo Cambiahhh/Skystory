@@ -157,6 +157,7 @@ const App: React.FC = () => {
 
     } catch (error) {
         console.error("Reprint failed", error);
+        alert(settings.appLanguage === 'CN' ? '显影失败，请检查网络连接' : 'Developing failed. Check connection.');
     } finally {
         setReprinting(false);
     }

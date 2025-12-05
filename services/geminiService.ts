@@ -7,6 +7,11 @@ import { GEMINI_MODEL, SYSTEM_INSTRUCTION } from '../constants';
 const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
 const ai = new GoogleGenAI({ apiKey: apiKey });
 
+// Helper for timeout
+const timeoutPromise = (ms: number) => new Promise<never>((_, reject) => {
+  setTimeout(() => reject(new Error("Request timed out")), ms);
+});
+
 export const analyzeSkyImage = async (
   base64Image: string,
   language: TargetLanguage,
@@ -24,7 +29,7 @@ export const analyzeSkyImage = async (
       Return a JSON object.
     `;
 
-    const response = await ai.models.generateContent({
+    const generatePromise = ai.models.generateContent({
       model: GEMINI_MODEL,
       contents: {
         parts: [
@@ -62,10 +67,19 @@ export const analyzeSkyImage = async (
       }
     });
 
+    // Race the generation against a 45s timeout to prevent infinite hanging
+    const response = await Promise.race([
+      generatePromise,
+      timeoutPromise(45000) 
+    ]) as any;
+
     const resultText = response.text;
     if (!resultText) throw new Error("No response from SkyStory");
 
-    const data = JSON.parse(resultText) as Omit<SkyAnalysisResult, 'timestamp' | 'imageUrl' | 'language'>;
+    // Clean potential markdown code blocks if present
+    const cleanedText = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
+
+    const data = JSON.parse(cleanedText) as Omit<SkyAnalysisResult, 'timestamp' | 'imageUrl' | 'language'>;
     
     return {
       ...data,
