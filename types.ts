@@ -40,8 +40,20 @@ export interface SkyAnalysisResult {
   language: TargetLanguage; // Track the language of this specific result
 }
 
-export interface JournalEntry extends SkyAnalysisResult {
+export enum FilterType {
+  ORIGINAL = 'original',
+  NATURAL = 'natural',
+  VIVID = 'vivid',
+  MONO = 'mono',
+  MOON = 'moon',
+  SUN = 'sun'
+}
+
+export interface JournalEntry extends Partial<SkyAnalysisResult> {
   id: string;
+  status: 'pending' | 'completed' | 'failed';
+  imageUrl: string; // Image is always present
+  filter?: FilterType; // Saved filter choice
 }
 
 export interface AppSettings {

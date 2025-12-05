@@ -1,4 +1,4 @@
-import { TargetLanguage, AppLanguage } from './types';
+import { TargetLanguage, AppLanguage, FilterType } from './types';
 
 export const GEMINI_MODEL = 'gemini-2.5-flash';
 
@@ -8,7 +8,7 @@ Do not teach. Do not explain. Just evoke emotion.
 Rules:
 1. Identify the cloud type or constellation based on the requested mode.
 2. Provide a "Poetic Expression" in the target language. This should be short, punchy, and emotional (max 15 words). Like a handwritten note on a photo.
-3. Provide a "Wisdom" (proverb/myth) that feels like a caption for a gallery exhibition.
+3. Provide a "Wisdom" (proverb/myth) that feels like a gallery caption.
 4. Output specific hex colors found in the image.
 `;
 
@@ -26,21 +26,13 @@ export const UI_LANGUAGES = [
   { code: AppLanguage.CN, label: '简体中文' },
 ];
 
-export const MOCK_LOADING_PHRASES = {
-  [AppLanguage.EN]: [
-    "Capturing light...",
-    "Developing...",
-    "Applying filters...",
-    "Fixing shadows...",
-    "Printing memory..."
-  ],
-  [AppLanguage.CN]: [
-    "正在捕捉光影...",
-    "显影中...",
-    "添加滤镜...",
-    "调整色调...",
-    "生成记忆..."
-  ]
+export const PHOTO_FILTERS = {
+  [FilterType.ORIGINAL]: { name: "Original", style: "" },
+  [FilterType.NATURAL]: { name: "Hasselblad X", style: "contrast-[1.05] saturate-[0.9] sepia-[0.1]" },
+  [FilterType.VIVID]: { name: "Vivid Color", style: "contrast-[1.1] saturate-[1.3] brightness-[1.05]" },
+  [FilterType.MONO]: { name: "Tri-X 400", style: "grayscale-[1] contrast-[1.2] brightness-[0.95]" },
+  [FilterType.MOON]: { name: "Moonlight", style: "saturate-[0.6] hue-rotate-[190deg] contrast-[1.1] brightness-[0.9]" },
+  [FilterType.SUN]: { name: "Sunlight", style: "sepia-[0.3] saturate-[1.1] contrast-[1.05] brightness-[1.05]" },
 };
 
 export const UI_TEXT = {
@@ -51,17 +43,22 @@ export const UI_TEXT = {
     journal: "Journal",
     settings: "Settings",
     appLang: "App Language",
-    filmStock: "Default Film Stock (Content)",
+    filmStock: "Default Film Stock",
     save: "Save",
     reprint: "Reprint",
     reprinting: "Reprinting...",
     tapToEdit: "Tap text to edit",
     journalTitle: "Sky Journal",
-    journalWarning: "Your SkyStory memories are stored in this browser. Please do not clear your browser cache.",
+    journalWarning: "Memories are stored in browser cache.",
     emptyJournal: "No memories developed yet.",
     cameraError: "Camera unavailable",
-    hazyError: "The sky is too hazy to read right now.",
-    back: "Back"
+    hazyError: "The sky is too hazy to read.",
+    back: "Back",
+    developing: "Developing...",
+    capturedTitle: "Moment Captured",
+    capturedDesc: "Tap to view in Sky Journal",
+    tapToFilter: "Tap photo to change filter",
+    selectFilter: "Select Film Style"
   },
   [AppLanguage.CN]: {
     subtitle: "把天空变成最浪漫的诗",
@@ -76,16 +73,21 @@ export const UI_TEXT = {
     reprinting: "重新显影中...",
     tapToEdit: "点击文字可编辑",
     journalTitle: "天空手账",
-    journalWarning: "您的天空记忆保存在当前浏览器中，请勿清理缓存，否则记忆将随风而去。",
+    journalWarning: "您的天空记忆保存在当前浏览器中。",
     emptyJournal: "暂无记忆",
     cameraError: "无法访问相机",
     hazyError: "天空太朦胧了，无法解读。",
-    back: "返回"
+    back: "返回",
+    developing: "显影中...",
+    capturedTitle: "瞬间已捕捉",
+    capturedDesc: "点击进入天空手账查看",
+    tapToFilter: "点击图片更换滤镜",
+    selectFilter: "选择胶片风格"
   }
 };
 
 export const DEFAULT_SETTINGS = {
-  appLanguage: AppLanguage.EN,
-  defaultFilmStock: TargetLanguage.EN,
+  appLanguage: AppLanguage.CN, // Default to CN for better font showcase
+  defaultFilmStock: TargetLanguage.CN,
   saveToDevice: true
 };
