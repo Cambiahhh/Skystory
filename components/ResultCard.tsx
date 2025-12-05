@@ -326,12 +326,7 @@ const ResultCard: React.FC<ResultCardProps> = ({
                 </div>
             )}
             
-            {/* Helper Text for Filters */}
-            {!isReprinting && !showFilterMenu && (
-                <div className="absolute -right-8 top-10 rotate-90 origin-bottom-left">
-                    <p className="text-[9px] text-white/20 uppercase tracking-[0.2em] animate-pulse">{t.tapToFilter}</p>
-                </div>
-            )}
+            {/* Helper Text for Filters has been removed */}
         </div>
 
         {/* Action Bar */}
