@@ -246,18 +246,18 @@ const ResultCard: React.FC<ResultCardProps> = ({
             {showFilterMenu && (
                <div 
                  ref={filterMenuRef}
-                 className="absolute top-20 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-md rounded-xl p-3 z-30 w-[90%] flex gap-2 overflow-x-auto no-scrollbar justify-center shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-200"
+                 className="absolute top-10 left-1/2 -translate-x-1/2 bg-black/90 backdrop-blur-md rounded-xl p-4 z-30 w-auto grid grid-cols-3 gap-x-4 gap-y-4 shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-200"
                >
                   {(Object.keys(PHOTO_FILTERS) as FilterType[]).map((fType) => (
                     <button
                       key={fType}
                       onClick={() => { setCurrentFilter(fType); setShowFilterMenu(false); }}
-                      className={`flex flex-col items-center gap-1 min-w-[50px] ${currentFilter === fType ? 'opacity-100' : 'opacity-50 hover:opacity-100'}`}
+                      className={`flex flex-col items-center gap-1.5 ${currentFilter === fType ? 'opacity-100' : 'opacity-50 hover:opacity-100'}`}
                     >
-                      <div className={`w-10 h-10 rounded-full bg-gray-200 overflow-hidden ${PHOTO_FILTERS[fType].style}`}>
+                      <div className={`w-12 h-12 rounded-full bg-gray-200 overflow-hidden ring-2 ${currentFilter === fType ? 'ring-white' : 'ring-transparent'} ${PHOTO_FILTERS[fType].style}`}>
                          {data.imageUrl && <img src={data.imageUrl} className="w-full h-full object-cover" />}
                       </div>
-                      <span className="text-[9px] text-white uppercase tracking-wider">{PHOTO_FILTERS[fType].name.split(' ')[0]}</span>
+                      <span className="text-[9px] text-white uppercase tracking-wider text-center leading-tight">{PHOTO_FILTERS[fType].name.split(' ')[0]}</span>
                     </button>
                   ))}
                </div>

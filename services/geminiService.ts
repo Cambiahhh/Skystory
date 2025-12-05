@@ -2,8 +2,10 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { SkyAnalysisResult, TargetLanguage, SkyMode } from '../types';
 import { GEMINI_MODEL, SYSTEM_INSTRUCTION } from '../constants';
 
-// Initialize the API client directly with the environment variable as per configuration requirements.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Initialize the API client. 
+// We use GEMINI_API_KEY as requested, but fallback to API_KEY to ensure compatibility with standard environments.
+const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+const ai = new GoogleGenAI({ apiKey: apiKey });
 
 export const analyzeSkyImage = async (
   base64Image: string,
