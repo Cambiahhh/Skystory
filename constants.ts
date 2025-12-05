@@ -58,7 +58,15 @@ export const UI_TEXT = {
     capturedTitle: "Moment Captured",
     capturedDesc: "Tap to view in Sky Journal",
     tapToFilter: "Tap photo to change filter",
-    selectFilter: "Select Film Style"
+    selectFilter: "Select Film Style",
+    filters: {
+      [FilterType.ORIGINAL]: "Original",
+      [FilterType.NATURAL]: "Natural",
+      [FilterType.VIVID]: "Vivid",
+      [FilterType.MONO]: "Mono",
+      [FilterType.MOON]: "Moonlight",
+      [FilterType.SUN]: "Sunlight"
+    }
   },
   [AppLanguage.CN]: {
     subtitle: "把天空变成最浪漫的诗",
@@ -82,7 +90,15 @@ export const UI_TEXT = {
     capturedTitle: "瞬间已捕捉",
     capturedDesc: "点击进入天空手账查看",
     tapToFilter: "点击图片更换滤镜",
-    selectFilter: "选择胶片风格"
+    selectFilter: "选择胶片风格",
+    filters: {
+      [FilterType.ORIGINAL]: "原片",
+      [FilterType.NATURAL]: "自然",
+      [FilterType.VIVID]: "鲜明",
+      [FilterType.MONO]: "黑白",
+      [FilterType.MOON]: "月光",
+      [FilterType.SUN]: "暖阳"
+    }
   }
 };
 
