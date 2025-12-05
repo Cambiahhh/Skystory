@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { ArrowLeft, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, Image as ImageIcon, SwitchCamera } from 'lucide-react';
 
 interface CameraViewProps {
   onImageSelected: (file: File) => void;
@@ -14,27 +14,52 @@ const CameraView: React.FC<CameraViewProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [cameraActive, setCameraActive] = useState(false);
+  
+  // Camera Device State
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [currentDeviceIndex, setCurrentDeviceIndex] = useState(0);
 
   useEffect(() => {
+    // Start with default logic
     startCamera();
+    
     return () => {
       stopCamera();
     };
   }, []);
 
-  const startCamera = async () => {
+  const startCamera = async (deviceId?: string) => {
+    // Ensure existing stream is stopped before starting a new one
+    stopCamera();
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'environment',
-        },
+      const constraints: MediaStreamConstraints = {
+        video: deviceId 
+          ? { deviceId: { exact: deviceId } } 
+          : { facingMode: 'environment' },
         audio: false,
-      });
+      };
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         setCameraActive(true);
       }
+
+      // Once permission is granted, enumerate devices to find multiple lenses
+      const allDevices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = allDevices.filter(d => d.kind === 'videoinput');
+      setDevices(videoDevices);
+
+      // If we just started up and haven't selected a specific device index yet,
+      // try to sync the index with the active track if possible, or just default to 0.
+      if (!deviceId && videoDevices.length > 0) {
+        // Try to find the one we are using, or default. 
+        // This is a bit tricky as constraints 'environment' is fuzzy.
+        // For simplicity, we just set the list.
+      }
+
     } catch (err) {
       console.error("Camera error", err);
       setCameraActive(false);
@@ -49,24 +74,55 @@ const CameraView: React.FC<CameraViewProps> = ({
     }
   };
 
-  const handleCapture = () => {
-    if (videoRef.current && canvasRef.current) {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      
-      const context = canvas.getContext('2d');
-      if (context) {
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        canvas.toBlob((blob) => {
-          if (blob) {
-            const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
-            onImageSelected(file);
-          }
-        }, 'image/jpeg', 0.95);
+  const handleSwitchCamera = () => {
+    if (devices.length < 2) return;
+    
+    const nextIndex = (currentDeviceIndex + 1) % devices.length;
+    setCurrentDeviceIndex(nextIndex);
+    
+    const nextDeviceId = devices[nextIndex].deviceId;
+    startCamera(nextDeviceId);
+  };
+
+  // Helper to resize image to max 1024px to prevent API timeouts and memory issues
+  const processAndResizeImage = (source: HTMLVideoElement | HTMLImageElement): Promise<File> => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      const MAX_SIZE = 1024;
+      let width = source instanceof HTMLVideoElement ? source.videoWidth : source.width;
+      let height = source instanceof HTMLVideoElement ? source.videoHeight : source.height;
+
+      // Calculate scale to fit max size while maintaining aspect ratio
+      if (width > height) {
+        if (width > MAX_SIZE) {
+          height *= MAX_SIZE / width;
+          width = MAX_SIZE;
+        }
+      } else {
+        if (height > MAX_SIZE) {
+          width *= MAX_SIZE / height;
+          height = MAX_SIZE;
+        }
       }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(source, 0, 0, width, height);
+
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
+          resolve(file);
+        }
+      }, 'image/jpeg', 0.85); // Compress slightly to 0.85
+    });
+  };
+
+  const handleCapture = async () => {
+    if (videoRef.current) {
+      const file = await processAndResizeImage(videoRef.current);
+      onImageSelected(file);
     } else {
         fileInputRef.current?.click();
     }
@@ -75,7 +131,15 @@ const CameraView: React.FC<CameraViewProps> = ({
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      onImageSelected(file);
+      // Load file into an image element to resize it
+      const img = new Image();
+      img.onload = async () => {
+        const resizedFile = await processAndResizeImage(img);
+        onImageSelected(resizedFile);
+        // Clean up
+        URL.revokeObjectURL(img.src);
+      };
+      img.src = URL.createObjectURL(file);
     }
   };
 
@@ -110,12 +174,22 @@ const CameraView: React.FC<CameraViewProps> = ({
                 <ArrowLeft size={24} />
             </button>
             
+            {/* Camera Switcher (Only visible if multiple cameras found) */}
+            {devices.length > 1 && (
+              <button 
+                onClick={handleSwitchCamera}
+                className="p-2 rounded-full bg-black/20 text-white/70 hover:bg-black/40 backdrop-blur-sm transition"
+              >
+                <SwitchCamera size={24} />
+              </button>
+            )}
+
             {/* Corners */}
             <div className="absolute top-6 left-6 w-8 h-8 border-t border-l border-white/60 pointer-events-none opacity-50"></div>
             <div className="absolute top-6 right-6 w-8 h-8 border-t border-r border-white/60 pointer-events-none opacity-50"></div>
         </div>
 
-        {/* Center: Clean view, removed artifacts */}
+        {/* Center: Clean view */}
 
         {/* Bottom Bar */}
         <div className="w-full relative flex flex-col items-center">

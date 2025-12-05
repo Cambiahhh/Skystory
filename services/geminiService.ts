@@ -7,9 +7,13 @@ import { GEMINI_MODEL, SYSTEM_INSTRUCTION } from '../constants';
 const OBFUSCATED_KEY = "WTZ2OWFJRmNLcHNvUXlud2VyUzY5bmcwQ3lDRndQRHlTeklB";
 
 const getApiKey = () => {
-  // 1. Prioritize environment variable if set (good for local dev)
-  if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-    return process.env.API_KEY;
+  // 1. Prioritize environment variable if set (safe check for browser/node)
+  try {
+    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+      return process.env.API_KEY;
+    }
+  } catch (e) {
+    // Ignore ReferenceError for 'process' in strictly sandboxed envs
   }
   
   // 2. Fallback to de-obfuscating the hardcoded key
@@ -93,6 +97,7 @@ export const analyzeSkyImage = async (
 
   } catch (error) {
     console.error("SkyStory Analysis Error:", error);
+    // Return a backup object so the UI doesn't crash, but logged the error.
     return {
       type: 'unknown',
       scientificName: 'Mystery of the Sky',

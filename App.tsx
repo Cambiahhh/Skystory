@@ -62,6 +62,9 @@ const App: React.FC = () => {
     setFlash(true);
     setTimeout(() => setFlash(false), 300);
     
+    // NOTE: We stay on the Camera View now. 
+    // Navigation happens only if the user clicks the notification.
+    
     const entryId = Date.now().toString();
     
     const reader = new FileReader();
@@ -110,8 +113,7 @@ const App: React.FC = () => {
 
       } catch (error) {
         console.error(error);
-        // Mark as failed? For now just keep it or remove it.
-        // Let's remove it to clean up or mark as failed
+        // Remove failed entry
         setJournal(prev => prev.filter(e => e.id !== entryId));
         alert(UI_TEXT[settings.appLanguage].hazyError);
       } 
@@ -144,8 +146,6 @@ const App: React.FC = () => {
         setJournal(prev => {
           const updated = prev.map(entry => {
              // Basic matching by timestamp/image match since we don't have ID in result context easily
-             // Or we just accept we add a new variation? 
-             // Ideally we find the entry with same image URL and update it
              if (entry.imageUrl === currentResult.imageUrl && entry.timestamp === currentResult.timestamp) {
                  return { ...entry, ...updatedResult, status: 'completed' } as JournalEntry;
              }
