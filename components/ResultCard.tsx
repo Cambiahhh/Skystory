@@ -191,19 +191,36 @@ const ResultCard: React.FC<ResultCardProps> = ({
   }, []);
 
   // Helper to bake filter into image via Canvas API
+  // NOTE: Adds Max Size constraint for Mobile Memory Safety
   const bakeFilter = async (imgSrc: string, filterCss: string): Promise<string> => {
     return new Promise((resolve) => {
       const img = new Image();
       img.crossOrigin = "anonymous";
       img.onload = () => {
+         // Cap max dimension to prevent mobile canvas crashes (12MP -> ~1.2MP)
+         const MAX_SIZE = 1200; 
+         let w = img.naturalWidth;
+         let h = img.naturalHeight;
+         
+         if (w > MAX_SIZE || h > MAX_SIZE) {
+             const ratio = w / h;
+             if (w > h) {
+                 w = MAX_SIZE;
+                 h = MAX_SIZE / ratio;
+             } else {
+                 h = MAX_SIZE;
+                 w = MAX_SIZE * ratio;
+             }
+         }
+
          const canvas = document.createElement('canvas');
-         canvas.width = img.naturalWidth;
-         canvas.height = img.naturalHeight;
+         canvas.width = w;
+         canvas.height = h;
          const ctx = canvas.getContext('2d');
          if (ctx) {
            // Apply the standard CSS filter syntax to the canvas context
            ctx.filter = filterCss !== 'none' ? filterCss : 'none';
-           ctx.drawImage(img, 0, 0);
+           ctx.drawImage(img, 0, 0, w, h);
            resolve(canvas.toDataURL('image/jpeg', 0.9));
          } else {
            resolve(imgSrc);
@@ -221,12 +238,16 @@ const ResultCard: React.FC<ResultCardProps> = ({
     try {
       // Show simple loading feedback
       const originalText = feedbackText;
-      triggerFeedback("Generating...");
+      triggerFeedback(t.developing);
 
       const container = document.createElement('div');
+      // Place it in the DOM but hidden from view, without using -10000px which can cause issues
       container.style.position = 'fixed';
-      container.style.top = '-10000px';
-      container.style.left = '-10000px';
+      container.style.left = '0';
+      container.style.top = '0';
+      container.style.width = '0';
+      container.style.height = '0';
+      container.style.overflow = 'hidden';
       container.style.zIndex = '-1';
       document.body.appendChild(container);
 
@@ -240,6 +261,8 @@ const ResultCard: React.FC<ResultCardProps> = ({
       const imgHeight = IMAGE_WIDTH * getHeightMultiplier(localAspectRatio);
 
       const card = document.createElement('div');
+      // Enforce border-box to ensure calculations are exact on all devices
+      card.style.boxSizing = 'border-box';
       card.style.width = `${BASE_WIDTH}px`;
       card.style.backgroundColor = '#fdfbf7';
       card.style.display = 'flex';
@@ -249,6 +272,7 @@ const ResultCard: React.FC<ResultCardProps> = ({
       card.style.paddingBottom = `${BOTTOM_PADDING}px`;
       
       const imgContainer = document.createElement('div');
+      imgContainer.style.boxSizing = 'border-box';
       imgContainer.style.width = `${IMAGE_WIDTH}px`;
       imgContainer.style.height = `${imgHeight}px`;
       imgContainer.style.backgroundColor = '#f1f5f9'; // slate-100
@@ -258,19 +282,19 @@ const ResultCard: React.FC<ResultCardProps> = ({
       imgContainer.style.boxShadow = 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.05)';
       
       if (data.imageUrl) {
-          const img = document.createElement('img');
           // PRE-BAKE FILTER: Apply filter to a new canvas and get base64
-          // This avoids html2canvas issues with CSS filters
           const filteredSrc = await bakeFilter(data.imageUrl, PHOTO_FILTERS[currentFilter].css);
           
-          img.src = filteredSrc;
-          img.style.width = '100%';
-          img.style.height = '100%';
-          img.style.objectFit = 'cover';
-          img.style.objectPosition = 'center'; 
-          // Note: we do NOT apply img.style.filter here because the image source itself is now filtered
-          img.crossOrigin = "anonymous";
-          imgContainer.appendChild(img);
+          // CRITICAL FIX: Use background-image instead of img tag.
+          // html2canvas handles background-size: cover much more reliably on mobile than object-fit.
+          const imgDiv = document.createElement('div');
+          imgDiv.style.width = '100%';
+          imgDiv.style.height = '100%';
+          imgDiv.style.backgroundImage = `url(${filteredSrc})`;
+          imgDiv.style.backgroundSize = 'cover';
+          imgDiv.style.backgroundPosition = 'center center';
+          imgDiv.style.backgroundRepeat = 'no-repeat';
+          imgContainer.appendChild(imgDiv);
       }
       
       // Overlays
@@ -297,6 +321,7 @@ const ResultCard: React.FC<ResultCardProps> = ({
       card.appendChild(imgContainer);
 
       const content = document.createElement('div');
+      content.style.boxSizing = 'border-box';
       content.style.width = '100%';
       content.style.display = 'flex';
       content.style.flexDirection = 'column';
@@ -388,7 +413,9 @@ const ResultCard: React.FC<ResultCardProps> = ({
         useCORS: true,
         allowTaint: true,
         width: BASE_WIDTH,
-        windowWidth: BASE_WIDTH + 100
+        windowWidth: BASE_WIDTH + 100,
+        scrollX: 0, // Force scroll position to avoid mobile cropping
+        scrollY: 0
       });
 
       document.body.removeChild(container);
