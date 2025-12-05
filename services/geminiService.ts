@@ -2,7 +2,27 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { SkyAnalysisResult, TargetLanguage, SkyMode } from '../types';
 import { GEMINI_MODEL, SYSTEM_INSTRUCTION } from '../constants';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Obfuscated Key Strategy: Base64(Reverse(API_KEY))
+// This prevents the raw key from being easily scraped from the source code.
+const OBFUSCATED_KEY = "WTZ2OWFJRmNLcHNvUXlud2VyUzY5bmcwQ3lDRndQRHlTeklB";
+
+const getApiKey = () => {
+  // 1. Prioritize environment variable if set (good for local dev)
+  if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+    return process.env.API_KEY;
+  }
+  
+  // 2. Fallback to de-obfuscating the hardcoded key
+  try {
+    // Decode Base64 -> Reverse String -> Original Key
+    return atob(OBFUSCATED_KEY).split('').reverse().join('');
+  } catch (e) {
+    console.error("Failed to decode credentials");
+    return '';
+  }
+};
+
+const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
 export const analyzeSkyImage = async (
   base64Image: string,
