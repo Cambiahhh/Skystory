@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { JournalEntry, AppLanguage } from '../types';
 import { X, Aperture, AlertCircle, Loader2, Trash2, AlertTriangle, Palette, Image as ImageIcon } from 'lucide-react';
 import { UI_TEXT } from '../constants';
@@ -16,14 +16,22 @@ interface SkyJournalProps {
 const JournalItem: React.FC<{
     entry: JournalEntry;
     isPaletteMode: boolean;
+    isFalling: boolean; // Prop to trigger fall animation
     onSelect: (entry: JournalEntry) => void;
     onDelete: (id: string) => void;
     t: any;
-}> = ({ entry, isPaletteMode, onSelect, onDelete, t }) => {
+}> = ({ entry, isPaletteMode, isFalling, onSelect, onDelete, t }) => {
     
     // Local flip state that overrides global mode if user interacts
     const [localFlip, setLocalFlip] = useState<boolean | null>(null);
     const isFlipped = localFlip !== null ? localFlip : isPaletteMode;
+
+    // Random rotation for the fall animation to look natural
+    const fallRotation = useRef(Math.random() * 60 - 30); // Reduced rotation range for more weight
+    
+    // Random horizontal drift (Impulse Force)
+    // Positive = Right, Negative = Left. Range: -80px to +80px (Subtle drift)
+    const fallX = useRef((Math.random() - 0.5) * 160);
 
     // Gesture State
     const touchStartRef = useRef<number | null>(null);
@@ -47,7 +55,19 @@ const JournalItem: React.FC<{
 
     return (
         <div 
-            className="break-inside-avoid perspective-1000 relative group mb-4"
+            className={`break-inside-avoid perspective-1000 relative group mb-8`}
+            style={{
+                 // Physics Animation: 
+                 // 'ease-in' starts slow and accelerates (Pure Gravity). 
+                 // No custom bezier with negative values to prevent upward movement.
+                 transition: 'transform 0.6s ease-in, opacity 0.6s ease-in', 
+                 transform: isFalling 
+                    ? `translate(${fallX.current}px, 100vh) rotate(${fallRotation.current}deg)` 
+                    : 'translate(0, 0) rotate(0deg)',
+                 opacity: isFalling ? 0 : 1,
+                 pointerEvents: isFalling ? 'none' : 'auto',
+                 zIndex: isFalling ? 50 : 'auto' 
+            }}
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
         >
@@ -66,19 +86,21 @@ const JournalItem: React.FC<{
                         </div>
                     )}
                     
-                    {/* Delete Button */}
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            onDelete(entry.id);
-                        }}
-                        className="absolute top-0 right-0 z-30 p-3 opacity-0 group-hover:opacity-100 transition-all focus:opacity-100"
-                    >
-                        <div className="bg-black/50 hover:bg-red-500 text-white rounded-full p-1.5 backdrop-blur-sm shadow-sm">
-                            <Trash2 size={12} />
-                        </div>
-                    </button>
+                    {/* Delete Button (Only shows on hover/focus) */}
+                    {!isFalling && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                onDelete(entry.id);
+                            }}
+                            className="absolute top-0 right-0 z-30 p-3 opacity-0 group-hover:opacity-100 transition-all focus:opacity-100 outline-none"
+                        >
+                            <div className="bg-black/50 hover:bg-red-500 text-white rounded-full p-1.5 backdrop-blur-sm shadow-sm transition-colors">
+                                <Trash2 size={12} />
+                            </div>
+                        </button>
+                    )}
 
                     <div className="aspect-square bg-gray-100 overflow-hidden mb-2 filter contrast-110 sepia-[0.1]">
                         {entry.imageUrl && (
@@ -110,7 +132,7 @@ const JournalItem: React.FC<{
                     </div>
                 </div>
 
-                {/* --- BACK FACE (PALETTE - REFINED) --- */}
+                {/* --- BACK FACE (PALETTE) --- */}
                 <div 
                     onClick={() => setLocalFlip(!isFlipped)}
                     className="absolute inset-0 backface-hidden rotate-y-n180 bg-white shadow-xl rounded-[2px] overflow-hidden cursor-pointer flex flex-col justify-between p-4"
@@ -152,21 +174,40 @@ const SkyJournal: React.FC<SkyJournalProps> = ({ entries, onClose, onSelectEntry
   const t = UI_TEXT[appLang];
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   
+  // Track which IDs are currently in the "falling" animation state
+  const [fallingIds, setFallingIds] = useState<Set<string>>(new Set());
+  
   // Global View Mode
   const [isPaletteMode, setIsPaletteMode] = useState(false);
 
   const confirmDelete = () => {
     if (deleteConfirmId) {
-      onDeleteEntry(deleteConfirmId);
+      // 1. Add ID to falling set to trigger animation
+      setFallingIds(prev => new Set(prev).add(deleteConfirmId));
+      
+      // 2. Close the modal immediately so user sees the animation
+      const idToDelete = deleteConfirmId;
       setDeleteConfirmId(null);
+
+      // 3. Wait for animation to finish (600ms to match transition) before actually removing data
+      setTimeout(() => {
+          onDeleteEntry(idToDelete);
+          // Cleanup local state
+          setFallingIds(prev => {
+              const next = new Set(prev);
+              next.delete(idToDelete);
+              return next;
+          });
+      }, 600);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-40 bg-[#0a0a0a] overflow-y-auto animate-in slide-in-from-bottom-10 duration-500 font-sans">
+    // Added overflow-x-hidden to prevent horizontal scrollbars during fall/drift
+    <div className="fixed inset-0 z-40 bg-[#0a0a0a] overflow-y-auto overflow-x-hidden animate-in slide-in-from-bottom-10 duration-500 font-sans">
       
       {/* Header */}
-      <div className="sticky top-0 bg-[#0a0a0a]/90 backdrop-blur-md z-10 px-6 py-6 flex items-center justify-between border-b border-white/5">
+      <div className="sticky top-0 bg-[#0a0a0a]/90 backdrop-blur-md z-40 px-6 py-6 flex items-center justify-between border-b border-white/5">
         <h2 className="text-xl font-serif-display text-white tracking-widest uppercase">{t.journalTitle}</h2>
         
         <div className="flex items-center gap-4">
@@ -208,12 +249,13 @@ const SkyJournal: React.FC<SkyJournalProps> = ({ entries, onClose, onSelectEntry
             <p className="font-serif-text italic text-sm">{t.emptyJournal}</p>
           </div>
         ) : (
-          <div className="columns-2 md:columns-3 lg:columns-4 gap-4">
+          <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-8">
             {entries.map((entry) => (
                 <JournalItem 
                     key={entry.id}
                     entry={entry}
                     isPaletteMode={isPaletteMode}
+                    isFalling={fallingIds.has(entry.id)}
                     onSelect={onSelectEntry}
                     onDelete={setDeleteConfirmId}
                     t={t}
@@ -225,7 +267,7 @@ const SkyJournal: React.FC<SkyJournalProps> = ({ entries, onClose, onSelectEntry
 
       {/* Delete Confirmation Modal */}
       {deleteConfirmId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
            <div className="bg-[#1a1a1a] border border-white/10 p-6 rounded-2xl w-full max-w-xs shadow-2xl transform scale-100 transition-all">
               <div className="flex flex-col items-center text-center gap-4">
                   <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center text-red-500 mb-2">
@@ -238,8 +280,8 @@ const SkyJournal: React.FC<SkyJournalProps> = ({ entries, onClose, onSelectEntry
                   
                   <p className="text-white/50 text-xs leading-relaxed">
                       {appLang === 'CN' 
-                        ? '这张天空的记忆将被永久删除，无法找回。' 
-                        : 'This sky memory will be permanently deleted. This action cannot be undone.'}
+                        ? '这张天空的记忆将被永久删除...' 
+                        : 'This memory will drift away forever.'}
                   </p>
 
                   <div className="flex gap-3 w-full mt-2">
@@ -247,13 +289,13 @@ const SkyJournal: React.FC<SkyJournalProps> = ({ entries, onClose, onSelectEntry
                         onClick={() => setDeleteConfirmId(null)}
                         className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-bold tracking-wider uppercase transition"
                       >
-                          {appLang === 'CN' ? '取消' : 'Cancel'}
+                          {appLang === 'CN' ? '保留' : 'Keep'}
                       </button>
                       <button 
                         onClick={confirmDelete}
                         className="flex-1 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white text-xs font-bold tracking-wider uppercase transition shadow-lg shadow-red-500/20"
                       >
-                          {appLang === 'CN' ? '删除' : 'Delete'}
+                          {appLang === 'CN' ? '丢弃' : 'Drop'}
                       </button>
                   </div>
               </div>

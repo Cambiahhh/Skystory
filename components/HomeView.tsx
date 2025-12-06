@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Cloud, Sparkles, BookOpen, Settings, Feather, X, Download } from 'lucide-react';
+import { Cloud, Sparkles, BookOpen, Settings, Feather, X, Download, HelpCircle } from 'lucide-react';
 import { SkyMode, AppLanguage } from '../types';
 import { UI_TEXT } from '../constants';
 
@@ -8,10 +8,11 @@ interface HomeViewProps {
   onSelectMode: (mode: SkyMode) => void;
   onOpenJournal: () => void;
   onOpenSettings: () => void;
+  onOpenTutorial: () => void;
   lang: AppLanguage;
 }
 
-const HomeView: React.FC<HomeViewProps> = ({ onSelectMode, onOpenJournal, onOpenSettings, lang }) => {
+const HomeView: React.FC<HomeViewProps> = ({ onSelectMode, onOpenJournal, onOpenSettings, onOpenTutorial, lang }) => {
   const t = UI_TEXT[lang];
   const [showPhilosophy, setShowPhilosophy] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<any>(null);
@@ -130,7 +131,7 @@ const HomeView: React.FC<HomeViewProps> = ({ onSelectMode, onOpenJournal, onOpen
         {/* Floating Dock (The Island) */}
         <div className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#111]/80 backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)]">
             
-            {/* Philosophy Button (Swapped) */}
+            {/* Philosophy Button */}
             <button 
                 onClick={() => setShowPhilosophy(true)}
                 className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 text-white/40 hover:text-white transition-all group relative"
@@ -141,7 +142,7 @@ const HomeView: React.FC<HomeViewProps> = ({ onSelectMode, onOpenJournal, onOpen
 
             <div className="w-[1px] h-4 bg-white/10"></div>
 
-            {/* Journal Button (Swapped) */}
+            {/* Journal Button */}
             <button 
                 onClick={onOpenJournal}
                 className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 text-white/40 hover:text-white transition-all group relative"
@@ -152,6 +153,18 @@ const HomeView: React.FC<HomeViewProps> = ({ onSelectMode, onOpenJournal, onOpen
 
             <div className="w-[1px] h-4 bg-white/10"></div>
 
+            {/* Tutorial Button (New) */}
+            <button 
+                onClick={onOpenTutorial}
+                className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 text-white/40 hover:text-white transition-all group relative"
+            >
+                <HelpCircle size={18} strokeWidth={1.5} />
+                <span className="absolute -top-8 text-[9px] bg-white/10 text-white px-2 py-0.5 rounded backdrop-blur opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">Guide</span>
+            </button>
+
+            <div className="w-[1px] h-4 bg-white/10"></div>
+
+            {/* Settings Button */}
             <button 
                 onClick={onOpenSettings}
                 className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 text-white/40 hover:text-white transition-all group relative"

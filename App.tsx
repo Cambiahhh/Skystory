@@ -5,6 +5,7 @@ import CameraView from './components/CameraView';
 import ResultCard from './components/ResultCard';
 import SkyJournal from './components/SkyJournal';
 import SettingsView from './components/SettingsView';
+import TutorialOverlay from './components/TutorialOverlay';
 import { analyzeSkyImage } from './services/geminiService';
 import { AppView, SkyAnalysisResult, TargetLanguage, JournalEntry, SkyMode, AppSettings, FilterType } from './types';
 import { DEFAULT_SETTINGS, UI_TEXT } from './constants';
@@ -24,8 +25,17 @@ const App: React.FC = () => {
   const [currentResult, setCurrentResult] = useState<SkyAnalysisResult | null>(null);
   const [journal, setJournal] = useState<JournalEntry[]>([]);
 
+  // Tutorial State
+  const [showTutorial, setShowTutorial] = useState(false);
+
   // Init
   useEffect(() => {
+    // Check Tutorial Status
+    const hasSeenTutorial = localStorage.getItem('skystory_tutorial_seen');
+    if (!hasSeenTutorial) {
+        setShowTutorial(true);
+    }
+
     // Load journal
     const savedJournal = localStorage.getItem('skystory_journal');
     if (savedJournal) {
@@ -48,6 +58,15 @@ const App: React.FC = () => {
       } catch (e) { console.error("Failed to load settings", e); }
     }
   }, []);
+
+  const handleTutorialClose = () => {
+      setShowTutorial(false);
+      localStorage.setItem('skystory_tutorial_seen', 'true');
+  };
+
+  const handleOpenTutorial = () => {
+      setShowTutorial(true);
+  };
 
   // Persist Settings
   const updateSettings = (newSettings: AppSettings) => {
@@ -187,12 +206,18 @@ const App: React.FC = () => {
       {/* Flash Layer */}
       <div className={`absolute inset-0 z-[60] bg-white pointer-events-none transition-opacity duration-300 ${flash ? 'opacity-100' : 'opacity-0'}`}></div>
 
+      {/* Tutorial Overlay */}
+      {showTutorial && (
+          <TutorialOverlay onClose={handleTutorialClose} lang={settings.appLanguage} />
+      )}
+
       {/* View Routing */}
       {currentView === AppView.HOME && (
         <HomeView 
           onSelectMode={handleSelectMode}
           onOpenJournal={() => setCurrentView(AppView.JOURNAL)}
           onOpenSettings={() => setCurrentView(AppView.SETTINGS)}
+          onOpenTutorial={handleOpenTutorial}
           lang={settings.appLanguage}
         />
       )}

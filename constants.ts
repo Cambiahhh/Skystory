@@ -107,7 +107,20 @@ export const UI_TEXT = {
       content: "We live in a world that rushes forward, heads down, buried in screens and schedules.\n\nBut above us, there is a canvas that changes every second, yet has watched over us for eternity.\n\nSkyStory was built not just to identify clouds or stars, but to give you a reason to pause. To breathe. To find a moment of romance in the mundane.\n\nWe believe the sky is the world's oldest language. We just help you translate it.\n\nThank you for looking up with us.",
       contact: "Author WeChat: Cambia2214"
     },
-    install: "Install App"
+    install: "Install App",
+    tutorial: {
+        welcome: "Welcome to SkyStory",
+        welcomeDesc: "Swipe to learn how to read the sky.",
+        step1Title: "Capture the Moment",
+        step1Desc: "Choose 'Daylight' for clouds or 'Midnight' for stars. Snap a photo to let AI translate the sky.",
+        step2Title: "Interactive Photo",
+        step2Desc: "Swipe Horizontally on the photo to change Aspect Ratio (1:1, 3:4, etc.). Swipe Vertically to change Filters.",
+        step3Title: "The Hidden Palette",
+        step3Desc: "Swipe Left on the white frame (outside the photo) to reveal the Sky Palette and exact colors.",
+        step4Title: "Your Journal",
+        step4Desc: "All memories are saved in your Journal. Tap any card in the journal to revisit it.",
+        done: "Start Exploring"
+    }
   },
   [AppLanguage.CN]: {
     subtitle: "把天空变成最浪漫的诗",
@@ -153,7 +166,20 @@ export const UI_TEXT = {
       content: "我们生活在一个匆忙的时代，\n大多数时候，我们低头赶路，\n沉浸在屏幕与日程表中。\n\n但在我们头顶，\n有一幅每秒钟都在变化的画卷，\n它沉默地注视了人类百万年。\n\nSkyStory 的诞生，\n不仅仅是为了识别云彩或星座，（星座部分正在加紧做！）\n更是为了给你一个停下来的理由。\n去呼吸，去在平凡的日常中寻找片刻的浪漫。\n\n我们相信，天空是世界上最古老的语言。\n我们只是帮你翻译了它。\n\n谢谢你，和我们一起抬头。",
       contact: "作者微信: Cambia2214"
     },
-    install: "安装到桌面"
+    install: "安装到桌面",
+    tutorial: {
+        welcome: "欢迎来到 SkyStory",
+        welcomeDesc: "简单的手势，带你读懂天空。",
+        step1Title: "捕捉瞬间",
+        step1Desc: "选择「云」或「星」模式，拍摄天空，让 AI 为你翻译此刻的浪漫。",
+        step2Title: "照片互动",
+        step2Desc: "在照片区域左右滑动切换比例 (1:1, 3:4...)；上下滑动切换胶片滤镜。",
+        step3Title: "隐藏色卡",
+        step3Desc: "在照片框外向左滑动，即可翻转卡片，查看专属的天空色卡与数据。",
+        step4Title: "天空手账",
+        step4Desc: "所有记忆都会保存在手账中。在手账页点击卡片可重新进入查看。",
+        done: "开始探索"
+    }
   }
 };
 
