@@ -31,8 +31,9 @@ const ResultCard: React.FC<ResultCardProps> = ({
   const [currentFilter, setCurrentFilter] = useState<FilterType>(initialFilter);
   const [localAspectRatio, setLocalAspectRatio] = useState<AspectRatio>(settings.aspectRatio);
   
-  // Flip State
-  const [isFlipped, setIsFlipped] = useState(false);
+  // Rotation State (Accumulated Degrees)
+  const [rotation, setRotation] = useState(0);
+  const isFlipped = Math.abs(rotation) % 360 !== 0;
 
   // Interaction State
   const [feedbackText, setFeedbackText] = useState<string>("");
@@ -91,20 +92,26 @@ const ResultCard: React.FC<ResultCardProps> = ({
           // Horizontal Swipe
           if (Math.abs(diffX) > SWIPE_THRESHOLD) {
               if (targetType === 'photo' && !isFlipped) {
-                  // Swipe ON Photo -> Change Aspect Ratio
+                   // Swipe ON Photo -> Change Aspect Ratio
                    const currentIndex = ASPECT_RATIOS.indexOf(localAspectRatio);
                    let nextIndex;
-                   if (diffX > 0) { // Swipe Right
+                   if (diffX > 0) { // Swipe Right (Drag right)
                        nextIndex = (currentIndex - 1 + ASPECT_RATIOS.length) % ASPECT_RATIOS.length;
-                   } else { // Swipe Left
+                   } else { // Swipe Left (Drag left)
                        nextIndex = (currentIndex + 1) % ASPECT_RATIOS.length;
                    }
                    const newRatio = ASPECT_RATIOS[nextIndex];
                    setLocalAspectRatio(newRatio);
                    triggerFeedback(t.aspectRatioOpts[newRatio]);
               } else {
-                  // Swipe ON Card (or flipped) -> Flip Card
-                  setIsFlipped(prev => !prev);
+                  // Swipe ON Card (or flipped) -> Directional Flip
+                  if (diffX > 0) {
+                      // Swipe L -> R: CW (+)
+                      setRotation(r => r + 180);
+                  } else {
+                      // Swipe R -> L: CCW (-)
+                      setRotation(r => r - 180);
+                  }
               }
           }
       } else {
@@ -139,11 +146,11 @@ const ResultCard: React.FC<ResultCardProps> = ({
       if (!touchStartRef.current) return;
       const endX = e.changedTouches[0].clientX;
       const endY = e.changedTouches[0].clientY;
-      handleSwipe(
-          touchStartRef.current.x - endX, 
-          touchStartRef.current.y - endY,
-          touchStartRef.current.targetType
-      );
+      
+      const deltaX = endX - touchStartRef.current.x;
+      const deltaY = endY - touchStartRef.current.y;
+      
+      handleSwipe(deltaX, deltaY, touchStartRef.current.targetType);
       touchStartRef.current = null;
   };
 
@@ -159,13 +166,10 @@ const ResultCard: React.FC<ResultCardProps> = ({
 
   const handleMouseUp = (e: React.MouseEvent) => {
       if (!mouseStartRef.current) return;
-      const endX = e.clientX;
-      const endY = e.clientY;
-      handleSwipe(
-          mouseStartRef.current.x - endX, 
-          mouseStartRef.current.y - endY,
-          mouseStartRef.current.targetType
-      );
+      const deltaX = e.clientX - mouseStartRef.current.x;
+      const deltaY = e.clientY - mouseStartRef.current.y;
+      
+      handleSwipe(deltaX, deltaY, mouseStartRef.current.targetType);
       mouseStartRef.current = null;
   };
 
@@ -285,9 +289,9 @@ const ResultCard: React.FC<ResultCardProps> = ({
           const frontHeightApprox = 20*SCALE_FACTOR + imgH + 280*SCALE_FACTOR; 
           card.style.height = `${frontHeightApprox}px`;
 
-          // UPDATED: Top-to-bottom Gradient
+          // UPDATED: Smooth Top-to-bottom Gradient
           const colors = data.dominantColors;
-          const gradient = `linear-gradient(to bottom, ${colors[0]}, ${colors[1]}, ${colors[2]})`;
+          const gradient = `linear-gradient(180deg, ${colors[0]} 0%, ${colors[1]} 50%, ${colors[2]} 100%)`;
           card.style.background = gradient;
           card.style.display = 'flex';
           card.style.flexDirection = 'column';
@@ -306,7 +310,6 @@ const ResultCard: React.FC<ResultCardProps> = ({
           footer.style.alignItems = 'flex-end';
           footer.style.width = '100%';
           
-          // Left: Hex Codes - High Class Style (Inter ExtraLight)
           const leftCol = document.createElement('div');
           leftCol.style.display = 'flex';
           leftCol.style.flexDirection = 'column';
@@ -325,7 +328,6 @@ const ResultCard: React.FC<ResultCardProps> = ({
           });
           footer.appendChild(leftCol);
 
-          // Right: Date & Logo - High Class Style
           const rightCol = document.createElement('div');
           rightCol.style.display = 'flex';
           rightCol.style.flexDirection = 'column';
@@ -333,7 +335,6 @@ const ResultCard: React.FC<ResultCardProps> = ({
           
           const time = document.createElement('div');
           time.innerText = new Date(data.timestamp).toLocaleDateString().replace(/\//g, '.');
-          // Noto Serif SC for Elegant Italic Date
           time.style.fontFamily = "'Noto Serif SC', serif"; 
           time.style.fontStyle = 'italic';
           time.style.fontWeight = '300';
@@ -345,7 +346,6 @@ const ResultCard: React.FC<ResultCardProps> = ({
 
           const brand = document.createElement('div');
           brand.innerText = "SkyStory";
-          // Cinzel for Majestic Logo
           brand.style.fontFamily = "'Cinzel', serif";
           brand.style.fontWeight = '400';
           brand.style.fontSize = `${14 * SCALE_FACTOR}px`;
@@ -552,8 +552,8 @@ const ResultCard: React.FC<ResultCardProps> = ({
             onMouseUp={handleMouseUp}
         > 
             <div 
-                className={`relative transition-all duration-700 transform-style-3d ${isFlipped ? 'rotate-y-n180' : ''}`}
-                style={{ width: '340px' }} // Fixed base width for calculation logic
+                className="relative transition-all duration-700 transform-style-3d"
+                style={{ width: '340px', transform: `rotateY(${rotation}deg)` }} // State-based Rotation
             >
 
                 {/* --- FRONT FACE (PHOTO) --- */}
@@ -649,9 +649,10 @@ const ResultCard: React.FC<ResultCardProps> = ({
 
                 {/* --- BACK FACE (GRADIENT PALETTE - REFINED) --- */}
                 <div 
-                    className="absolute inset-0 backface-hidden rotate-y-n180 shadow-2xl polaroid-shadow flex flex-col justify-between p-8"
+                    className="absolute inset-0 backface-hidden rotate-y-180 shadow-2xl polaroid-shadow flex flex-col justify-between p-8"
                     style={{
-                        background: `linear-gradient(to bottom, ${data.dominantColors[0]}, ${data.dominantColors[1]}, ${data.dominantColors[2]})`,
+                        // Smooth Gradient
+                        background: `linear-gradient(180deg, ${data.dominantColors[0]} 0%, ${data.dominantColors[1]} 50%, ${data.dominantColors[2]} 100%)`,
                     }}
                 >
                     {/* Empty top space for pure color enjoyment */}
@@ -683,7 +684,7 @@ const ResultCard: React.FC<ResultCardProps> = ({
                     </div>
 
                     {/* Subtle Overlay Texture for Back */}
-                    <div className="absolute inset-0 bg-white/5 mix-blend-overlay pointer-events-none"></div>
+                    <div className="absolute inset-0 bg-white/5 mix-blend-soft-light pointer-events-none"></div>
                     {/* Clean edge border */}
                     <div className="absolute inset-0 border border-white/10 pointer-events-none"></div>
                 </div>

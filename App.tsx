@@ -199,6 +199,12 @@ const App: React.FC = () => {
       return updated;
     });
   };
+  
+  // Reorder Logic
+  const handleReorderEntries = (newEntries: JournalEntry[]) => {
+      setJournal(newEntries);
+      localStorage.setItem('skystory_journal', JSON.stringify(newEntries));
+  };
 
   return (
     <div className="h-full w-full relative bg-black font-sans">
@@ -252,6 +258,7 @@ const App: React.FC = () => {
             }
           }}
           onDeleteEntry={handleDeleteEntry}
+          onReorderEntries={handleReorderEntries}
           appLang={settings.appLanguage}
         />
       )}
