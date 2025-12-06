@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SkyAnalysisResult, TargetLanguage, AppLanguage, FilterType, AppSettings, AspectRatio } from '../types';
 import { LANGUAGES, UI_TEXT, PHOTO_FILTERS } from '../constants';
-import { Download, X, Globe, RefreshCw, Scan } from 'lucide-react';
+import { Download, X, Globe, RefreshCw, Scan, RotateCw } from 'lucide-react';
 
 interface ResultCardProps {
   data: SkyAnalysisResult;
@@ -31,6 +31,9 @@ const ResultCard: React.FC<ResultCardProps> = ({
   const [currentFilter, setCurrentFilter] = useState<FilterType>(initialFilter);
   const [localAspectRatio, setLocalAspectRatio] = useState<AspectRatio>(settings.aspectRatio);
   
+  // Flip State
+  const [isFlipped, setIsFlipped] = useState(false);
+
   // Interaction State
   const [feedbackText, setFeedbackText] = useState<string>("");
   const [showFeedback, setShowFeedback] = useState(false);
@@ -38,10 +41,11 @@ const ResultCard: React.FC<ResultCardProps> = ({
   // Refs
   const languageMenuRef = useRef<HTMLDivElement>(null);
   const languageTriggerRef = useRef<HTMLButtonElement>(null);
+  const photoAreaRef = useRef<HTMLDivElement>(null);
   
   // Gesture Refs
-  const touchStartRef = useRef<{x: number, y: number} | null>(null);
-  const mouseStartRef = useRef<{x: number, y: number} | null>(null);
+  const touchStartRef = useRef<{x: number, y: number, targetType: 'photo' | 'card'} | null>(null);
+  const mouseStartRef = useRef<{x: number, y: number, targetType: 'photo' | 'card'} | null>(null);
 
   // Constants
   const FILTER_KEYS = Object.keys(PHOTO_FILTERS) as FilterType[];
@@ -79,36 +83,38 @@ const ResultCard: React.FC<ResultCardProps> = ({
       return { height: `${baseWidth * getHeightMultiplier(localAspectRatio)}px` };
   };
 
-  // --- Gesture Logic (Shared) ---
-  const handleSwipe = (diffX: number, diffY: number) => {
-      const SWIPE_THRESHOLD = 40; 
+  // --- Gesture Logic ---
+  const handleSwipe = (diffX: number, diffY: number, targetType: 'photo' | 'card') => {
+      const SWIPE_THRESHOLD = 30; 
 
       if (Math.abs(diffX) > Math.abs(diffY)) {
-          // Horizontal Swipe -> Cycle Aspect Ratio
+          // Horizontal Swipe
           if (Math.abs(diffX) > SWIPE_THRESHOLD) {
-              const currentIndex = ASPECT_RATIOS.indexOf(localAspectRatio);
-              let nextIndex;
-              if (diffX > 0) {
-                  // Swipe Right -> Prev Ratio (Loop)
-                  nextIndex = (currentIndex - 1 + ASPECT_RATIOS.length) % ASPECT_RATIOS.length;
+              if (targetType === 'photo' && !isFlipped) {
+                  // Swipe ON Photo -> Change Aspect Ratio
+                   const currentIndex = ASPECT_RATIOS.indexOf(localAspectRatio);
+                   let nextIndex;
+                   if (diffX > 0) { // Swipe Right
+                       nextIndex = (currentIndex - 1 + ASPECT_RATIOS.length) % ASPECT_RATIOS.length;
+                   } else { // Swipe Left
+                       nextIndex = (currentIndex + 1) % ASPECT_RATIOS.length;
+                   }
+                   const newRatio = ASPECT_RATIOS[nextIndex];
+                   setLocalAspectRatio(newRatio);
+                   triggerFeedback(t.aspectRatioOpts[newRatio]);
               } else {
-                  // Swipe Left -> Next Ratio (Loop)
-                  nextIndex = (currentIndex + 1) % ASPECT_RATIOS.length;
+                  // Swipe ON Card (or flipped) -> Flip Card
+                  setIsFlipped(prev => !prev);
               }
-              const newRatio = ASPECT_RATIOS[nextIndex];
-              setLocalAspectRatio(newRatio);
-              triggerFeedback(t.aspectRatioOpts[newRatio]);
           }
       } else {
-          // Vertical Swipe -> Cycle Filter
-          if (Math.abs(diffY) > SWIPE_THRESHOLD) {
+          // Vertical Swipe -> Cycle Filter (Only on Photo Area when not flipped)
+          if (targetType === 'photo' && !isFlipped && Math.abs(diffY) > SWIPE_THRESHOLD) {
               const currentIndex = FILTER_KEYS.indexOf(currentFilter);
               let nextIndex;
-              if (diffY > 0) {
-                   // Drag Down -> Prev Filter
+              if (diffY > 0) { // Drag Down
                    nextIndex = (currentIndex - 1 + FILTER_KEYS.length) % FILTER_KEYS.length;
-              } else {
-                   // Drag Up -> Next Filter
+              } else { // Drag Up
                    nextIndex = (currentIndex + 1) % FILTER_KEYS.length;
               }
               const nextFilter = FILTER_KEYS[nextIndex];
@@ -120,28 +126,46 @@ const ResultCard: React.FC<ResultCardProps> = ({
 
   // Touch Handlers
   const handleTouchStart = (e: React.TouchEvent) => {
-      touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      // Determine if touch started on the photo area
+      const isPhoto = photoAreaRef.current && photoAreaRef.current.contains(e.target as Node);
+      touchStartRef.current = { 
+          x: e.touches[0].clientX, 
+          y: e.touches[0].clientY,
+          targetType: isPhoto ? 'photo' : 'card'
+      };
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
       if (!touchStartRef.current) return;
       const endX = e.changedTouches[0].clientX;
       const endY = e.changedTouches[0].clientY;
-      handleSwipe(touchStartRef.current.x - endX, touchStartRef.current.y - endY);
+      handleSwipe(
+          touchStartRef.current.x - endX, 
+          touchStartRef.current.y - endY,
+          touchStartRef.current.targetType
+      );
       touchStartRef.current = null;
   };
 
   // Mouse Handlers (Desktop)
   const handleMouseDown = (e: React.MouseEvent) => {
-      e.preventDefault(); // Prevent image drag behavior
-      mouseStartRef.current = { x: e.clientX, y: e.clientY };
+      const isPhoto = photoAreaRef.current && photoAreaRef.current.contains(e.target as Node);
+      mouseStartRef.current = { 
+          x: e.clientX, 
+          y: e.clientY,
+          targetType: isPhoto ? 'photo' : 'card'
+      };
   };
 
   const handleMouseUp = (e: React.MouseEvent) => {
       if (!mouseStartRef.current) return;
       const endX = e.clientX;
       const endY = e.clientY;
-      handleSwipe(mouseStartRef.current.x - endX, mouseStartRef.current.y - endY);
+      handleSwipe(
+          mouseStartRef.current.x - endX, 
+          mouseStartRef.current.y - endY,
+          mouseStartRef.current.targetType
+      );
       mouseStartRef.current = null;
   };
 
@@ -191,13 +215,11 @@ const ResultCard: React.FC<ResultCardProps> = ({
   }, []);
 
   // Helper to bake filter into image via Canvas API
-  // NOTE: Adds Max Size constraint for Mobile Memory Safety
   const bakeFilter = async (imgSrc: string, filterCss: string): Promise<string> => {
     return new Promise((resolve) => {
       const img = new Image();
       img.crossOrigin = "anonymous";
       img.onload = () => {
-         // Cap max dimension to prevent mobile canvas crashes (12MP -> ~1.2MP)
          const MAX_SIZE = 1200; 
          let w = img.naturalWidth;
          let h = img.naturalHeight;
@@ -218,7 +240,6 @@ const ResultCard: React.FC<ResultCardProps> = ({
          canvas.height = h;
          const ctx = canvas.getContext('2d');
          if (ctx) {
-           // Apply the standard CSS filter syntax to the canvas context
            ctx.filter = filterCss !== 'none' ? filterCss : 'none';
            ctx.drawImage(img, 0, 0, w, h);
            resolve(canvas.toDataURL('image/jpeg', 0.9));
@@ -236,12 +257,9 @@ const ResultCard: React.FC<ResultCardProps> = ({
     if (!(window as any).html2canvas) return;
 
     try {
-      // Show simple loading feedback
-      const originalText = feedbackText;
       triggerFeedback(t.developing);
 
       const container = document.createElement('div');
-      // Place it in the DOM but hidden from view, without using -10000px which can cause issues
       container.style.position = 'fixed';
       container.style.left = '0';
       container.style.top = '0';
@@ -252,155 +270,232 @@ const ResultCard: React.FC<ResultCardProps> = ({
       document.body.appendChild(container);
 
       // Scale Factors
-      const SCALE_FACTOR = 2; // Render at 2x size for crisp text
+      const SCALE_FACTOR = 2; // Render at 2x size
       const BASE_WIDTH = 340 * SCALE_FACTOR;
-      const PADDING = 20 * SCALE_FACTOR;
-      const BOTTOM_PADDING = 32 * SCALE_FACTOR;
-      const IMAGE_WIDTH = BASE_WIDTH - (PADDING * 2);
       
-      const imgHeight = IMAGE_WIDTH * getHeightMultiplier(localAspectRatio);
-
       const card = document.createElement('div');
-      // Enforce border-box to ensure calculations are exact on all devices
       card.style.boxSizing = 'border-box';
       card.style.width = `${BASE_WIDTH}px`;
-      card.style.backgroundColor = '#fdfbf7';
-      card.style.display = 'flex';
-      card.style.flexDirection = 'column';
-      card.style.alignItems = 'center';
-      card.style.padding = `${PADDING}px`;
-      card.style.paddingBottom = `${BOTTOM_PADDING}px`;
       
-      const imgContainer = document.createElement('div');
-      imgContainer.style.boxSizing = 'border-box';
-      imgContainer.style.width = `${IMAGE_WIDTH}px`;
-      imgContainer.style.height = `${imgHeight}px`;
-      imgContainer.style.backgroundColor = '#f1f5f9'; // slate-100
-      imgContainer.style.position = 'relative';
-      imgContainer.style.overflow = 'hidden';
-      imgContainer.style.marginBottom = `${24 * SCALE_FACTOR}px`; 
-      imgContainer.style.boxShadow = 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.05)';
-      
-      if (data.imageUrl) {
-          // PRE-BAKE FILTER: Apply filter to a new canvas and get base64
-          const filteredSrc = await bakeFilter(data.imageUrl, PHOTO_FILTERS[currentFilter].css);
+      if (isFlipped) {
+          // --- RENDER BACK (GRADIENT PALETTE) ---
+          const PADDING = 30 * SCALE_FACTOR;
           
-          // CRITICAL FIX: Use background-image instead of img tag.
-          // html2canvas handles background-size: cover much more reliably on mobile than object-fit.
-          const imgDiv = document.createElement('div');
-          imgDiv.style.width = '100%';
-          imgDiv.style.height = '100%';
-          imgDiv.style.backgroundImage = `url(${filteredSrc})`;
-          imgDiv.style.backgroundSize = 'cover';
-          imgDiv.style.backgroundPosition = 'center center';
-          imgDiv.style.backgroundRepeat = 'no-repeat';
-          imgContainer.appendChild(imgDiv);
+          const imgH = (BASE_WIDTH - (20 * SCALE_FACTOR * 2)) * getHeightMultiplier(localAspectRatio);
+          const frontHeightApprox = 20*SCALE_FACTOR + imgH + 280*SCALE_FACTOR; 
+          card.style.height = `${frontHeightApprox}px`;
+
+          // UPDATED: Top-to-bottom Gradient
+          const colors = data.dominantColors;
+          const gradient = `linear-gradient(to bottom, ${colors[0]}, ${colors[1]}, ${colors[2]})`;
+          card.style.background = gradient;
+          card.style.display = 'flex';
+          card.style.flexDirection = 'column';
+          card.style.justifyContent = 'space-between';
+          card.style.padding = `${PADDING}px`;
+          
+          const body = document.createElement('div');
+          body.style.flex = '1';
+          body.style.position = 'relative';
+          body.style.width = '100%';
+          card.appendChild(body);
+
+          const footer = document.createElement('div');
+          footer.style.display = 'flex';
+          footer.style.justifyContent = 'space-between';
+          footer.style.alignItems = 'flex-end';
+          footer.style.width = '100%';
+          
+          // Left: Hex Codes - High Class Style (Inter ExtraLight)
+          const leftCol = document.createElement('div');
+          leftCol.style.display = 'flex';
+          leftCol.style.flexDirection = 'column';
+          leftCol.style.gap = `${4 * SCALE_FACTOR}px`;
+          
+          colors.forEach(color => {
+              const code = document.createElement('div');
+              code.innerText = color.toUpperCase();
+              code.style.fontFamily = "'Inter', sans-serif";
+              code.style.fontWeight = '200'; // Extra Light
+              code.style.fontSize = `${10 * SCALE_FACTOR}px`;
+              code.style.color = 'rgba(255,255,255,0.95)';
+              code.style.letterSpacing = '0.25em'; // Very wide tracking
+              code.style.textShadow = '0 1px 2px rgba(0,0,0,0.05)';
+              leftCol.appendChild(code);
+          });
+          footer.appendChild(leftCol);
+
+          // Right: Date & Logo - High Class Style
+          const rightCol = document.createElement('div');
+          rightCol.style.display = 'flex';
+          rightCol.style.flexDirection = 'column';
+          rightCol.style.alignItems = 'flex-end';
+          
+          const time = document.createElement('div');
+          time.innerText = new Date(data.timestamp).toLocaleDateString().replace(/\//g, '.');
+          // Noto Serif SC for Elegant Italic Date
+          time.style.fontFamily = "'Noto Serif SC', serif"; 
+          time.style.fontStyle = 'italic';
+          time.style.fontWeight = '300';
+          time.style.fontSize = `${10 * SCALE_FACTOR}px`;
+          time.style.color = 'rgba(255,255,255,0.8)';
+          time.style.letterSpacing = '0.05em';
+          time.style.marginBottom = `${4 * SCALE_FACTOR}px`;
+          rightCol.appendChild(time);
+
+          const brand = document.createElement('div');
+          brand.innerText = "SkyStory";
+          // Cinzel for Majestic Logo
+          brand.style.fontFamily = "'Cinzel', serif";
+          brand.style.fontWeight = '400';
+          brand.style.fontSize = `${14 * SCALE_FACTOR}px`;
+          brand.style.letterSpacing = '0.15em';
+          brand.style.color = 'rgba(255,255,255,0.95)';
+          rightCol.appendChild(brand);
+
+          footer.appendChild(rightCol);
+          card.appendChild(footer);
+
+      } else {
+          // --- RENDER FRONT (ORIGINAL) ---
+          const PADDING = 20 * SCALE_FACTOR;
+          const BOTTOM_PADDING = 32 * SCALE_FACTOR;
+          const IMAGE_WIDTH = BASE_WIDTH - (PADDING * 2);
+          const imgHeight = IMAGE_WIDTH * getHeightMultiplier(localAspectRatio);
+
+          card.style.backgroundColor = '#fdfbf7';
+          card.style.display = 'flex';
+          card.style.flexDirection = 'column';
+          card.style.alignItems = 'center';
+          card.style.padding = `${PADDING}px`;
+          card.style.paddingBottom = `${BOTTOM_PADDING}px`;
+          
+          const imgContainer = document.createElement('div');
+          imgContainer.style.boxSizing = 'border-box';
+          imgContainer.style.width = `${IMAGE_WIDTH}px`;
+          imgContainer.style.height = `${imgHeight}px`;
+          imgContainer.style.backgroundColor = '#f1f5f9'; 
+          imgContainer.style.position = 'relative';
+          imgContainer.style.overflow = 'hidden';
+          imgContainer.style.marginBottom = `${24 * SCALE_FACTOR}px`; 
+          imgContainer.style.boxShadow = 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.05)';
+          
+          if (data.imageUrl) {
+              const filteredSrc = await bakeFilter(data.imageUrl, PHOTO_FILTERS[currentFilter].css);
+              const imgDiv = document.createElement('div');
+              imgDiv.style.width = '100%';
+              imgDiv.style.height = '100%';
+              imgDiv.style.backgroundImage = `url(${filteredSrc})`;
+              imgDiv.style.backgroundSize = 'cover';
+              imgDiv.style.backgroundPosition = 'center center';
+              imgDiv.style.backgroundRepeat = 'no-repeat';
+              imgContainer.appendChild(imgDiv);
+          }
+          
+          const overlay1 = document.createElement('div');
+          overlay1.style.position = 'absolute';
+          overlay1.style.top = '0';
+          overlay1.style.left = '0';
+          overlay1.style.right = '0';
+          overlay1.style.bottom = '0';
+          overlay1.style.background = 'linear-gradient(to top right, rgba(249, 115, 22, 0.1), rgba(59, 130, 246, 0.1))';
+          overlay1.style.mixBlendMode = 'overlay';
+          imgContainer.appendChild(overlay1);
+
+          const overlay2 = document.createElement('div');
+          overlay2.style.position = 'absolute';
+          overlay2.style.top = '0';
+          overlay2.style.left = '0';
+          overlay2.style.right = '0';
+          overlay2.style.bottom = '0';
+          overlay2.style.background = 'rgba(0, 0, 0, 0.05)';
+          overlay2.style.mixBlendMode = 'multiply';
+          imgContainer.appendChild(overlay2);
+          
+          card.appendChild(imgContainer);
+
+          const content = document.createElement('div');
+          content.style.boxSizing = 'border-box';
+          content.style.width = '100%';
+          content.style.display = 'flex';
+          content.style.flexDirection = 'column';
+          content.style.alignItems = 'center';
+          content.style.padding = '0 8px';
+
+          const poem = document.createElement('div');
+          poem.innerText = poeticText;
+          poem.style.width = '100%';
+          poem.style.fontSize = `${24 * SCALE_FACTOR}px`;
+          poem.style.lineHeight = '1.4';
+          poem.style.fontFamily = "'Caveat', 'Long Cang', cursive";
+          poem.style.color = '#1e293b';
+          poem.style.textAlign = 'center';
+          poem.style.marginBottom = `${24 * SCALE_FACTOR}px`;
+          poem.style.whiteSpace = 'pre-wrap';
+          content.appendChild(poem);
+
+          const divider = document.createElement('div');
+          divider.style.width = `${48 * SCALE_FACTOR}px`;
+          divider.style.height = `${1 * SCALE_FACTOR}px`; 
+          divider.style.backgroundColor = '#e2e8f0'; 
+          divider.style.marginBottom = `${24 * SCALE_FACTOR}px`;
+          content.appendChild(divider);
+
+          const title = document.createElement('div');
+          title.innerText = titleText;
+          title.style.fontFamily = "'Cinzel', 'ZCOOL XiaoWei', serif";
+          title.style.fontSize = `${14 * SCALE_FACTOR}px`;
+          title.style.color = '#64748b';
+          title.style.textTransform = 'uppercase';
+          title.style.letterSpacing = '0.2em';
+          title.style.textAlign = 'center';
+          title.style.marginBottom = `${12 * SCALE_FACTOR}px`;
+          title.style.width = '100%';
+          title.style.wordBreak = 'break-word';
+          content.appendChild(title);
+
+          const proverb = document.createElement('div');
+          proverb.innerText = detailsText;
+          proverb.style.fontFamily = "'Noto Serif SC', serif";
+          proverb.style.fontSize = `${12 * SCALE_FACTOR}px`;
+          proverb.style.lineHeight = '1.6';
+          proverb.style.fontStyle = 'italic';
+          proverb.style.color = '#64748b';
+          proverb.style.textAlign = 'center';
+          proverb.style.marginBottom = `${16 * SCALE_FACTOR}px`;
+          proverb.style.width = '100%';
+          proverb.style.whiteSpace = 'pre-wrap';
+          content.appendChild(proverb);
+
+          const dateEl = document.createElement('div');
+          dateEl.innerText = dateText;
+          dateEl.style.color = '#cbd5e1';
+          dateEl.style.fontSize = `${9 * SCALE_FACTOR}px`;
+          dateEl.style.fontFamily = "monospace";
+          dateEl.style.letterSpacing = '0.1em';
+          dateEl.style.textTransform = 'uppercase';
+          dateEl.style.marginBottom = `${12 * SCALE_FACTOR}px`;
+          content.appendChild(dateEl);
+
+          const dots = document.createElement('div');
+          dots.style.display = 'flex';
+          dots.style.justifyContent = 'center';
+          dots.style.gap = `${8 * SCALE_FACTOR}px`;
+          dots.style.opacity = '0.8';
+          dots.style.marginTop = `${4 * SCALE_FACTOR}px`;
+          
+          data.dominantColors.forEach(c => {
+              const d = document.createElement('div');
+              d.style.width = `${10 * SCALE_FACTOR}px`;
+              d.style.height = `${10 * SCALE_FACTOR}px`;
+              d.style.borderRadius = '50%';
+              d.style.backgroundColor = c;
+              dots.appendChild(d);
+          });
+          content.appendChild(dots);
+          card.appendChild(content);
       }
-      
-      // Overlays
-      const overlay1 = document.createElement('div');
-      overlay1.style.position = 'absolute';
-      overlay1.style.top = '0';
-      overlay1.style.left = '0';
-      overlay1.style.right = '0';
-      overlay1.style.bottom = '0';
-      overlay1.style.background = 'linear-gradient(to top right, rgba(249, 115, 22, 0.1), rgba(59, 130, 246, 0.1))';
-      overlay1.style.mixBlendMode = 'overlay';
-      imgContainer.appendChild(overlay1);
 
-      const overlay2 = document.createElement('div');
-      overlay2.style.position = 'absolute';
-      overlay2.style.top = '0';
-      overlay2.style.left = '0';
-      overlay2.style.right = '0';
-      overlay2.style.bottom = '0';
-      overlay2.style.background = 'rgba(0, 0, 0, 0.05)';
-      overlay2.style.mixBlendMode = 'multiply';
-      imgContainer.appendChild(overlay2);
-      
-      card.appendChild(imgContainer);
-
-      const content = document.createElement('div');
-      content.style.boxSizing = 'border-box';
-      content.style.width = '100%';
-      content.style.display = 'flex';
-      content.style.flexDirection = 'column';
-      content.style.alignItems = 'center';
-      content.style.padding = '0 8px';
-
-      const poem = document.createElement('div');
-      poem.innerText = poeticText;
-      poem.style.width = '100%';
-      poem.style.fontSize = `${24 * SCALE_FACTOR}px`;
-      poem.style.lineHeight = '1.4';
-      poem.style.fontFamily = "'Caveat', 'Long Cang', cursive";
-      poem.style.color = '#1e293b'; // slate-800
-      poem.style.textAlign = 'center';
-      poem.style.marginBottom = `${24 * SCALE_FACTOR}px`;
-      poem.style.whiteSpace = 'pre-wrap';
-      content.appendChild(poem);
-
-      const divider = document.createElement('div');
-      divider.style.width = `${48 * SCALE_FACTOR}px`;
-      divider.style.height = `${1 * SCALE_FACTOR}px`; 
-      divider.style.backgroundColor = '#e2e8f0'; // slate-200
-      divider.style.marginBottom = `${24 * SCALE_FACTOR}px`;
-      content.appendChild(divider);
-
-      const title = document.createElement('div');
-      title.innerText = titleText;
-      title.style.fontFamily = "'Cinzel', 'ZCOOL XiaoWei', serif";
-      title.style.fontSize = `${14 * SCALE_FACTOR}px`;
-      title.style.color = '#64748b'; // slate-500
-      title.style.textTransform = 'uppercase';
-      title.style.letterSpacing = '0.2em';
-      title.style.textAlign = 'center';
-      title.style.marginBottom = `${12 * SCALE_FACTOR}px`;
-      title.style.width = '100%';
-      title.style.wordBreak = 'break-word';
-      content.appendChild(title);
-
-      const proverb = document.createElement('div');
-      proverb.innerText = detailsText;
-      proverb.style.fontFamily = "'Noto Serif SC', serif";
-      proverb.style.fontSize = `${12 * SCALE_FACTOR}px`;
-      proverb.style.lineHeight = '1.6';
-      proverb.style.fontStyle = 'italic';
-      proverb.style.color = '#64748b';
-      proverb.style.textAlign = 'center';
-      proverb.style.marginBottom = `${16 * SCALE_FACTOR}px`;
-      proverb.style.width = '100%';
-      proverb.style.whiteSpace = 'pre-wrap';
-      content.appendChild(proverb);
-
-      const dateEl = document.createElement('div');
-      dateEl.innerText = dateText;
-      dateEl.style.color = '#cbd5e1'; // slate-300
-      dateEl.style.fontSize = `${9 * SCALE_FACTOR}px`;
-      dateEl.style.fontFamily = "monospace";
-      dateEl.style.letterSpacing = '0.1em';
-      dateEl.style.textTransform = 'uppercase';
-      dateEl.style.marginBottom = `${12 * SCALE_FACTOR}px`;
-      content.appendChild(dateEl);
-
-      const dots = document.createElement('div');
-      dots.style.display = 'flex';
-      dots.style.justifyContent = 'center';
-      dots.style.gap = `${8 * SCALE_FACTOR}px`;
-      dots.style.opacity = '0.8';
-      dots.style.marginTop = `${4 * SCALE_FACTOR}px`;
-      
-      data.dominantColors.forEach(c => {
-          const d = document.createElement('div');
-          d.style.width = `${10 * SCALE_FACTOR}px`;
-          d.style.height = `${10 * SCALE_FACTOR}px`;
-          d.style.borderRadius = '50%';
-          d.style.backgroundColor = c;
-          dots.appendChild(d);
-      });
-      content.appendChild(dots);
-
-      card.appendChild(content);
       container.appendChild(card);
 
       // Wait for DOM to render styles
@@ -414,7 +509,7 @@ const ResultCard: React.FC<ResultCardProps> = ({
         allowTaint: true,
         width: BASE_WIDTH,
         windowWidth: BASE_WIDTH + 100,
-        scrollX: 0, // Force scroll position to avoid mobile cropping
+        scrollX: 0, 
         scrollY: 0
       });
 
@@ -423,7 +518,7 @@ const ResultCard: React.FC<ResultCardProps> = ({
       const image = canvas.toDataURL("image/png");
       const link = document.createElement('a');
       link.href = image;
-      link.download = `skystory-${Date.now()}.png`;
+      link.download = `skystory-${isFlipped ? 'palette' : 'photo'}-${Date.now()}.png`;
       link.click();
     } catch (error) {
       console.error("Download failed:", error);
@@ -443,122 +538,157 @@ const ResultCard: React.FC<ResultCardProps> = ({
         className={`relative z-10 flex flex-col items-center justify-center w-full h-full transition-all duration-1000 ${isMounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'}`}
       >
         
-        {/* The Polaroid */}
+        {/* The 3D Container - Add handlers here for the CARD (Flip) */}
         <div 
             style={{ 
-                transform: `scale(${scale}) rotate(1deg)`,
-                transformOrigin: 'center center'
+                transform: `scale(${scale})`,
+                transformOrigin: 'center center',
+                touchAction: 'none'
             }}
-            className="relative transition-transform duration-300"
+            className="perspective-1000 relative"
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            onMouseDown={handleMouseDown}
+            onMouseUp={handleMouseUp}
         > 
             <div 
-                className={`bg-[#fdfbf7] p-5 pb-8 w-[340px] shadow-2xl polaroid-shadow transition-all duration-500 flex flex-col items-center ${isReprinting ? 'blur-[2px] opacity-80 grayscale' : ''}`}
+                className={`relative transition-all duration-700 transform-style-3d ${isFlipped ? 'rotate-y-n180' : ''}`}
+                style={{ width: '340px' }} // Fixed base width for calculation logic
             >
-            
-            {/* Image Section - Gestures Enabled */}
-            <div 
-              style={{
-                  ...getDisplayHeightStyle(300),
-                  touchAction: 'none' // CRITICAL: Enables swipe gestures without scrolling page
-              }}
-              className={`w-full bg-slate-100 relative overflow-hidden mb-6 shadow-inner cursor-grab active:cursor-grabbing group transition-all duration-500 ${PHOTO_FILTERS[currentFilter].style}`}
-              onTouchStart={handleTouchStart}
-              onTouchEnd={handleTouchEnd}
-              onMouseDown={handleMouseDown}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={() => { mouseStartRef.current = null; }}
-            >
-                {data.imageUrl && (
-                    <img 
-                        src={data.imageUrl} 
-                        alt="Sky" 
-                        className="w-full h-full object-cover object-center pointer-events-none select-none"
-                        crossOrigin="anonymous" 
-                    />
-                )}
-                
-                {/* Visual Feedback Overlay */}
-                <div className={`absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity duration-300 pointer-events-none ${showFeedback ? 'opacity-100' : 'opacity-0'}`}>
-                    <span className="text-white font-serif-display tracking-widest text-lg uppercase drop-shadow-lg border border-white/50 px-4 py-2 rounded-lg backdrop-blur-md">
-                        {feedbackText}
-                    </span>
-                </div>
 
-                {/* Texture */}
-                <div className="absolute inset-0 bg-gradient-to-tr from-orange-500/10 to-blue-500/10 mix-blend-overlay pointer-events-none"></div>
-                <div className="absolute inset-0 bg-black/5 mix-blend-multiply pointer-events-none"></div>
-                
-                {/* Hint */}
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/10 pointer-events-none">
-                     <div className="flex gap-8 text-white/80">
-                         <Scan size={24} className="animate-pulse" />
-                     </div>
-                </div>
-            </div>
+                {/* --- FRONT FACE (PHOTO) --- */}
+                <div 
+                    className="backface-hidden bg-[#fdfbf7] p-5 pb-8 shadow-2xl polaroid-shadow flex flex-col items-center origin-center"
+                >
+                    {/* Image Section */}
+                    <div 
+                        ref={photoAreaRef}
+                        style={{
+                            ...getDisplayHeightStyle(300)
+                        }}
+                        className={`w-full bg-slate-100 relative overflow-hidden mb-6 shadow-inner cursor-grab active:cursor-grabbing group transition-all duration-500 ${PHOTO_FILTERS[currentFilter].style}`}
+                    >
+                        {data.imageUrl && (
+                            <img 
+                                src={data.imageUrl} 
+                                alt="Sky" 
+                                className="w-full h-full object-cover object-center pointer-events-none select-none"
+                                crossOrigin="anonymous" 
+                            />
+                        )}
+                        
+                        {/* Visual Feedback Overlay */}
+                        <div className={`absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity duration-300 pointer-events-none ${showFeedback ? 'opacity-100' : 'opacity-0'}`}>
+                            <span className="text-white font-serif-display tracking-widest text-lg uppercase drop-shadow-lg border border-white/50 px-4 py-2 rounded-lg backdrop-blur-md">
+                                {feedbackText}
+                            </span>
+                        </div>
 
-            {/* Content Section */}
-            <div className="px-1 w-full flex flex-col items-center">
-                
-                {/* Poem */}
-                <div className="relative w-full mb-6">
-                    <textarea
-                        value={poeticText}
-                        onChange={(e) => setPoeticText(e.target.value)}
-                        className="w-full bg-transparent border-none outline-none text-[24px] leading-[1.4] font-handwriting text-slate-800 text-center resize-none overflow-hidden h-40 p-0 m-0"
-                        spellCheck={false}
-                    />
-                </div>
-                
-                <div className="w-12 h-[1px] bg-slate-200 mb-6"></div>
-
-                {/* Scientific Name */}
-                <textarea 
-                    value={titleText}
-                    onChange={(e) => setTitleText(e.target.value)}
-                    className="w-full bg-transparent border-none outline-none font-serif-display text-[14px] text-slate-500 uppercase tracking-[0.2em] text-center mb-3 resize-none overflow-hidden h-auto"
-                    rows={1}
-                    onInput={(e) => {
-                        const target = e.target as HTMLTextAreaElement;
-                        target.style.height = 'auto';
-                        target.style.height = target.scrollHeight + 'px';
-                    }}
-                />
-
-                {/* Proverb */}
-                <textarea
-                    value={detailsText}
-                    onChange={(e) => setDetailsText(e.target.value)}
-                    className="w-full bg-transparent border-none outline-none font-serif-text text-[12px] leading-relaxed italic text-slate-500 text-center resize-none h-16 mb-2"
-                    spellCheck={false}
-                />
-                
-                {/* Date */}
-                <input 
-                    type="text"
-                    value={dateText}
-                    onChange={(e) => setDateText(e.target.value)}
-                    className="bg-transparent text-slate-300 text-[9px] font-mono tracking-widest uppercase text-center w-full outline-none border-none mb-3"
-                />
-
-                {/* Color Dots */}
-                <div className="flex justify-center gap-2 opacity-80">
-                    {data.dominantColors.map((c, i) => (
-                        <div key={i} className="w-2.5 h-2.5 rounded-full shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)]" style={{backgroundColor: c}}></div>
-                    ))}
-                </div>
-
-            </div>
-            </div>
-
-            {/* Reprint Loading Overlay */}
-            {isReprinting && (
-                <div className="absolute inset-0 flex items-center justify-center z-20">
-                    <div className="bg-black/80 text-white px-8 py-4 rounded-full text-sm font-serif-text tracking-widest animate-pulse backdrop-blur-md shadow-xl border border-white/10">
-                        {t.reprinting}
+                        {/* Texture */}
+                        <div className="absolute inset-0 bg-gradient-to-tr from-orange-500/10 to-blue-500/10 mix-blend-overlay pointer-events-none"></div>
+                        <div className="absolute inset-0 bg-black/5 mix-blend-multiply pointer-events-none"></div>
+                        
+                        {/* Hint */}
+                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/10 pointer-events-none">
+                            <div className="flex gap-8 text-white/80">
+                                <Scan size={24} className="animate-pulse" />
+                            </div>
+                        </div>
                     </div>
+
+                    {/* Content Section */}
+                    <div className="px-1 w-full flex flex-col items-center">
+                        <div className="relative w-full mb-6">
+                            <textarea
+                                value={poeticText}
+                                onChange={(e) => setPoeticText(e.target.value)}
+                                className="w-full bg-transparent border-none outline-none text-[24px] leading-[1.4] font-handwriting text-slate-800 text-center resize-none overflow-hidden h-40 p-0 m-0"
+                                spellCheck={false}
+                            />
+                        </div>
+                        <div className="w-12 h-[1px] bg-slate-200 mb-6"></div>
+                        <textarea 
+                            value={titleText}
+                            onChange={(e) => setTitleText(e.target.value)}
+                            className="w-full bg-transparent border-none outline-none font-serif-display text-[14px] text-slate-500 uppercase tracking-[0.2em] text-center mb-3 resize-none overflow-hidden h-auto"
+                            rows={1}
+                            onInput={(e) => {
+                                const target = e.target as HTMLTextAreaElement;
+                                target.style.height = 'auto';
+                                target.style.height = target.scrollHeight + 'px';
+                            }}
+                        />
+                        <textarea
+                            value={detailsText}
+                            onChange={(e) => setDetailsText(e.target.value)}
+                            className="w-full bg-transparent border-none outline-none font-serif-text text-[12px] leading-relaxed italic text-slate-500 text-center resize-none h-16 mb-2"
+                            spellCheck={false}
+                        />
+                        <input 
+                            type="text"
+                            value={dateText}
+                            onChange={(e) => setDateText(e.target.value)}
+                            className="bg-transparent text-slate-300 text-[9px] font-mono tracking-widest uppercase text-center w-full outline-none border-none mb-3"
+                        />
+                        <div className="flex justify-center gap-2 opacity-80">
+                            {data.dominantColors.map((c, i) => (
+                                <div key={i} className="w-2.5 h-2.5 rounded-full shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)]" style={{backgroundColor: c}}></div>
+                            ))}
+                        </div>
+                    </div>
+                    
+                    {/* Reprint Loading Overlay (Front only) */}
+                    {isReprinting && (
+                        <div className="absolute inset-0 flex items-center justify-center z-20">
+                            <div className="bg-black/80 text-white px-8 py-4 rounded-full text-sm font-serif-text tracking-widest animate-pulse backdrop-blur-md shadow-xl border border-white/10">
+                                {t.reprinting}
+                            </div>
+                        </div>
+                    )}
                 </div>
-            )}
-            
+
+                {/* --- BACK FACE (GRADIENT PALETTE - REFINED) --- */}
+                <div 
+                    className="absolute inset-0 backface-hidden rotate-y-n180 shadow-2xl polaroid-shadow flex flex-col justify-between p-8"
+                    style={{
+                        background: `linear-gradient(to bottom, ${data.dominantColors[0]}, ${data.dominantColors[1]}, ${data.dominantColors[2]})`,
+                    }}
+                >
+                    {/* Empty top space for pure color enjoyment */}
+                    <div className="flex-1"></div>
+
+                    {/* Footer Content */}
+                    <div className="flex justify-between items-end">
+                        
+                        {/* Bottom Left: Hex Codes - Clean, Extra Light Inter */}
+                        <div className="flex flex-col gap-1.5">
+                             {data.dominantColors.map((color, i) => (
+                                <span key={i} className="font-sans font-[200] text-[10px] text-white/95 uppercase tracking-[0.25em] drop-shadow-sm">
+                                    {color}
+                                </span>
+                             ))}
+                        </div>
+
+                        {/* Bottom Right: Date & Logo */}
+                        <div className="flex flex-col items-end gap-1 text-right">
+                             {/* Noto Serif SC Italic for elegant date */}
+                             <span className="font-serif-text italic font-light text-[10px] text-white/80 tracking-widest drop-shadow-sm">
+                                 {new Date(data.timestamp).toLocaleDateString().replace(/\//g, '.')}
+                             </span>
+                             {/* Cinzel for Majestic Logo */}
+                             <span className="font-serif-display text-[14px] text-white tracking-[0.15em] drop-shadow-sm mt-0.5">
+                                SkyStory
+                             </span>
+                        </div>
+                    </div>
+
+                    {/* Subtle Overlay Texture for Back */}
+                    <div className="absolute inset-0 bg-white/5 mix-blend-overlay pointer-events-none"></div>
+                    {/* Clean edge border */}
+                    <div className="absolute inset-0 border border-white/10 pointer-events-none"></div>
+                </div>
+
+            </div>
         </div>
 
         {/* Action Bar */}
@@ -616,7 +746,7 @@ const ResultCard: React.FC<ResultCardProps> = ({
         </div>
         
         <p className="absolute bottom-24 text-white/30 text-[10px] font-mono tracking-widest uppercase pointer-events-none">
-            Swipe Image: ↕ Filter &nbsp; ↔ Size
+            Swipe: ↔ Flip / Aspect &nbsp; ↕ Filter
         </p>
 
       </div>

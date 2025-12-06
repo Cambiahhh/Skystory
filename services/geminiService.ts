@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { SkyAnalysisResult, TargetLanguage, SkyMode } from '../types';
 import { GEMINI_MODEL, SYSTEM_INSTRUCTION } from '../constants';
@@ -27,6 +28,7 @@ export const analyzeSkyImage = async (
       Analyze this image of the sky. Mode: ${modeInstruction}.
       The target language is ${language}.
       Return a JSON object.
+      IMPORTANT: For 'dominantColors', extract 3 hex codes specifically representing the sky gradient, ordered from the TOP of the sky to the HORIZON (Bottom).
     `;
 
     const generatePromise = ai.models.generateContent({
@@ -59,7 +61,7 @@ export const analyzeSkyImage = async (
             dominantColors: { 
               type: Type.ARRAY, 
               items: { type: Type.STRING },
-              description: "Array of 3 hex color codes representing the sky palette" 
+              description: "Array of 3 hex color codes representing the sky gradient from top to bottom" 
             }
           },
           required: ['type', 'scientificName', 'translatedName', 'poeticExpression', 'proverb', 'dominantColors']
@@ -98,7 +100,7 @@ export const analyzeSkyImage = async (
       poeticExpression: 'The sky whispers secrets we cannot yet understand.',
       proverb: 'Even when the sky is silent, it is beautiful.',
       proverbTranslation: 'Nature speaks in many tongues.',
-      dominantColors: ['#87CEEB', '#E0F7FA', '#FFFFFF'],
+      dominantColors: ['#1e3a8a', '#60a5fa', '#fcd34d'], // Default gradient
       timestamp: Date.now(),
       imageUrl: `data:image/jpeg;base64,${base64Image}`,
       language: language
