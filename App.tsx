@@ -11,7 +11,7 @@ import { AppView, SkyAnalysisResult, TargetLanguage, JournalEntry, SkyMode, AppS
 import { DEFAULT_SETTINGS, UI_TEXT } from './constants';
 import { Bell } from 'lucide-react';
 
-const App: React.FC = () => {
+export const App: React.FC = () => {
   // State
   const [currentView, setCurrentView] = useState<AppView>(AppView.HOME);
   const [mode, setMode] = useState<SkyMode>(SkyMode.CLOUD);
@@ -82,6 +82,10 @@ const App: React.FC = () => {
 
   const handleBackToHome = () => {
     setCurrentView(AppView.HOME);
+  };
+
+  const handleBackToJournal = () => {
+    setCurrentView(AppView.JOURNAL);
   };
 
   // Analysis Logic (Async)
@@ -237,8 +241,10 @@ const App: React.FC = () => {
 
       {currentView === AppView.RESULT && currentResult && (
         <ResultCard 
-          data={currentResult} 
-          onClose={handleBackToHome} 
+          data={currentResult}
+          entries={journal}
+          onNavigate={(entry) => setCurrentResult(entry as SkyAnalysisResult)}
+          onClose={handleBackToJournal} 
           onReprint={handleReprint}
           isReprinting={reprinting}
           appLang={settings.appLanguage}
@@ -296,5 +302,3 @@ const App: React.FC = () => {
     </div>
   );
 };
-
-export default App;

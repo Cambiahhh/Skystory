@@ -1,6 +1,7 @@
+
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { JournalEntry, AppLanguage } from '../types';
-import { X, Aperture, AlertCircle, Loader2, Trash2, AlertTriangle, Palette, Image as ImageIcon } from 'lucide-react';
+import { X, Aperture, AlertCircle, Loader2, Trash2, AlertTriangle, Palette, Image as ImageIcon, Filter } from 'lucide-react';
 import { UI_TEXT } from '../constants';
 
 interface SkyJournalProps {
@@ -11,6 +12,85 @@ interface SkyJournalProps {
   onReorderEntries: (newEntries: JournalEntry[]) => void;
   appLang: AppLanguage;
 }
+
+// --- Color Helper Logic ---
+
+type ColorCategory = 'red' | 'orange' | 'yellow' | 'green' | 'cyan' | 'blue' | 'purple' | 'white' | 'gray' | 'black';
+
+const COLOR_FILTERS: { id: ColorCategory; hex: string; label: string }[] = [
+    { id: 'red', hex: '#ef4444', label: 'Red' },
+    { id: 'orange', hex: '#f97316', label: 'Orange' },
+    { id: 'yellow', hex: '#eab308', label: 'Yellow' },
+    { id: 'green', hex: '#22c55e', label: 'Green' },
+    { id: 'cyan', hex: '#06b6d4', label: 'Cyan' },
+    { id: 'blue', hex: '#3b82f6', label: 'Blue' },
+    { id: 'purple', hex: '#a855f7', label: 'Purple' },
+    { id: 'white', hex: '#f8fafc', label: 'White' },
+    { id: 'gray', hex: '#94a3b8', label: 'Gray' },
+    { id: 'black', hex: '#1e293b', label: 'Black' },
+];
+
+// Convert Hex to HSL to categorize colors
+const hexToHsl = (hex: string) => {
+    let r = 0, g = 0, b = 0;
+    if (hex.length === 4) {
+        r = parseInt("0x" + hex[1] + hex[1]);
+        g = parseInt("0x" + hex[2] + hex[2]);
+        b = parseInt("0x" + hex[3] + hex[3]);
+    } else if (hex.length === 7) {
+        r = parseInt("0x" + hex[1] + hex[2]);
+        g = parseInt("0x" + hex[3] + hex[4]);
+        b = parseInt("0x" + hex[5] + hex[6]);
+    }
+    r /= 255; g /= 255; b /= 255;
+    const cmin = Math.min(r, g, b), cmax = Math.max(r, g, b), delta = cmax - cmin;
+    let h = 0, s = 0, l = 0;
+
+    if (delta === 0) h = 0;
+    else if (cmax === r) h = ((g - b) / delta) % 6;
+    else if (cmax === g) h = (b - r) / delta + 2;
+    else h = (r - g) / delta + 4;
+
+    h = Math.round(h * 60);
+    if (h < 0) h += 360;
+    l = (cmax + cmin) / 2;
+    s = delta === 0 ? 0 : delta / (1 - Math.abs(2 * l - 1));
+    s = +(s * 100).toFixed(1);
+    l = +(l * 100).toFixed(1);
+
+    return { h, s, l };
+};
+
+const getColorCategory = (hex: string): ColorCategory => {
+    const { h, s, l } = hexToHsl(hex);
+
+    // Achromatic Check
+    if (l < 20) return 'black';
+    if (l > 85) return 'white';
+    if (s < 15) return 'gray';
+
+    // Hue Check
+    if (h >= 345 || h < 15) return 'red';
+    if (h >= 15 && h < 45) return 'orange';
+    if (h >= 45 && h < 75) return 'yellow';
+    if (h >= 75 && h < 155) return 'green';
+    if (h >= 155 && h < 195) return 'cyan';
+    if (h >= 195 && h < 265) return 'blue';
+    if (h >= 265 && h < 345) return 'purple';
+    
+    return 'gray'; // Fallback
+};
+
+// Check if an entry matches the selected filter
+const matchesFilter = (entry: JournalEntry, filter: ColorCategory | null): boolean => {
+    if (!filter) return true;
+    if (!entry.dominantColors) return false;
+    
+    // If any of the 3 dominant colors matches the category
+    return entry.dominantColors.some(hex => getColorCategory(hex) === filter);
+};
+
+// --- End Color Helper Logic ---
 
 // Sub-component for individual journal items
 const JournalItem: React.FC<{
@@ -276,6 +356,10 @@ const SkyJournal: React.FC<SkyJournalProps> = ({ entries, onClose, onSelectEntry
   const [fallingIds, setFallingIds] = useState<Set<string>>(new Set());
   const [isPaletteMode, setIsPaletteMode] = useState(false);
   
+  // Filter State
+  const [showFilter, setShowFilter] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<ColorCategory | null>(null);
+
   // Drag State
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
@@ -317,67 +401,139 @@ const SkyJournal: React.FC<SkyJournalProps> = ({ entries, onClose, onSelectEntry
       setDraggedIndex(null);
   };
 
+  // Filtered Entries Calculation
+  const filteredEntries = useMemo(() => {
+    return entries.filter(entry => matchesFilter(entry, activeFilter));
+  }, [entries, activeFilter]);
+
   return (
     <div className="fixed inset-0 z-40 bg-[#0a0a0a] overflow-y-auto overflow-x-hidden animate-in slide-in-from-bottom-10 duration-500 font-sans">
       
       {/* Header */}
-      <div className="sticky top-0 bg-[#0a0a0a]/90 backdrop-blur-md z-40 px-6 py-6 flex items-center justify-between border-b border-white/5">
-        <h2 className="text-xl font-serif-display text-white tracking-widest uppercase">{t.journalTitle}</h2>
-        
-        <div className="flex items-center gap-4">
-            <button 
-                onClick={() => setIsPaletteMode(!isPaletteMode)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${isPaletteMode ? 'bg-white text-black border-white' : 'bg-transparent text-white/60 border-white/20 hover:border-white/50'}`}
-            >
-                {isPaletteMode ? <ImageIcon size={14} /> : <Palette size={14} />}
-                <span className="text-[10px] uppercase tracking-wider font-bold">
-                    {isPaletteMode ? (appLang === 'CN' ? '照片' : 'Photo') : (appLang === 'CN' ? '色卡' : 'Palette')}
-                </span>
-            </button>
+      <div className="sticky top-0 bg-[#0a0a0a]/90 backdrop-blur-md z-40 flex flex-col border-b border-white/5 transition-all duration-300">
+          <div className="px-6 py-6 flex items-center justify-between">
+            <h2 className="text-xl font-serif-display text-white tracking-widest uppercase">{t.journalTitle}</h2>
+            
+            <div className="flex items-center gap-4">
+                
+                {/* Filter Toggle */}
+                <button 
+                    onClick={() => setShowFilter(!showFilter)}
+                    className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all ${
+                        activeFilter || showFilter 
+                        ? 'bg-white text-black border-white' 
+                        : 'bg-transparent text-white/60 border-white/20 hover:border-white/50'
+                    }`}
+                >
+                    <Filter size={14} fill={activeFilter ? "currentColor" : "none"} />
+                </button>
 
-            <button 
-              onClick={onClose}
-              className="p-2 text-white/60 hover:text-white transition"
-            >
-              <X size={24} />
-            </button>
-        </div>
+                {/* Palette Toggle */}
+                <button 
+                    onClick={() => setIsPaletteMode(!isPaletteMode)}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${isPaletteMode ? 'bg-white text-black border-white' : 'bg-transparent text-white/60 border-white/20 hover:border-white/50'}`}
+                >
+                    {isPaletteMode ? <ImageIcon size={14} /> : <Palette size={14} />}
+                    <span className="text-[10px] uppercase tracking-wider font-bold">
+                        {isPaletteMode ? (appLang === 'CN' ? '照片' : 'Photo') : (appLang === 'CN' ? '色卡' : 'Palette')}
+                    </span>
+                </button>
+
+                <button 
+                onClick={onClose}
+                className="p-2 text-white/60 hover:text-white transition"
+                >
+                <X size={24} />
+                </button>
+            </div>
+          </div>
+
+          {/* Color Filter Drawer */}
+          <div 
+             className={`w-full overflow-hidden transition-all duration-500 ease-in-out ${showFilter ? 'max-h-24 opacity-100 border-t border-white/5' : 'max-h-0 opacity-0'}`}
+          >
+              <div className="px-6 py-4 flex gap-4 overflow-x-auto no-scrollbar items-center">
+                  <span className="text-[10px] text-white/40 font-mono uppercase tracking-wider whitespace-nowrap">Filter:</span>
+                  {COLOR_FILTERS.map(color => (
+                      <button
+                        key={color.id}
+                        onClick={() => setActiveFilter(activeFilter === color.id ? null : color.id)}
+                        className={`group relative flex flex-col items-center gap-1.5 min-w-[32px]`}
+                      >
+                         <div 
+                            className={`w-6 h-6 rounded-full border transition-all duration-300 ${
+                                activeFilter === color.id 
+                                ? 'scale-110 border-white shadow-[0_0_10px_rgba(255,255,255,0.5)]' 
+                                : 'scale-100 border-transparent hover:scale-110 opacity-70 hover:opacity-100'
+                            }`}
+                            style={{ backgroundColor: color.hex, borderColor: color.id === 'white' || color.id === 'black' ? '#ffffff30' : undefined }}
+                         ></div>
+                         {activeFilter === color.id && (
+                             <span className="absolute -bottom-4 text-[8px] text-white/80 font-mono tracking-widest uppercase animate-in slide-in-from-top-1 fade-in">
+                                 {appLang === 'CN' ? color.label[0] : color.label}
+                             </span>
+                         )}
+                      </button>
+                  ))}
+                  {activeFilter && (
+                      <button 
+                        onClick={() => setActiveFilter(null)}
+                        className="ml-2 px-3 py-1 text-[9px] border border-white/20 rounded-full text-white/50 hover:text-white hover:border-white transition-colors uppercase tracking-wider"
+                      >
+                          Clear
+                      </button>
+                  )}
+              </div>
+          </div>
       </div>
 
-      <div className="px-6 pt-6 pb-2">
-        <div className="bg-blue-900/10 border border-blue-500/20 rounded-lg p-3 flex gap-3 items-start">
-            <AlertCircle size={16} className="text-blue-400 mt-0.5 shrink-0" />
-            <p className="text-[10px] text-blue-200/70 leading-relaxed font-serif-text">
-                {t.journalWarning}
-            </p>
+      {!showFilter && (
+        <div className="px-6 pt-6 pb-2">
+            <div className="bg-blue-900/10 border border-blue-500/20 rounded-lg p-3 flex gap-3 items-start">
+                <AlertCircle size={16} className="text-blue-400 mt-0.5 shrink-0" />
+                <p className="text-[10px] text-blue-200/70 leading-relaxed font-serif-text">
+                    {t.journalWarning}
+                </p>
+            </div>
         </div>
-      </div>
+      )}
 
-      <div className="p-4 md:p-6 pb-20">
+      <div className="p-4 md:p-6 pb-20 min-h-[60vh]">
         {entries.length === 0 ? (
           <div className="h-[50vh] flex flex-col items-center justify-center text-white/20">
             <Aperture size={48} strokeWidth={1} className="mb-4 opacity-50" />
             <p className="font-serif-text italic text-sm">{t.emptyJournal}</p>
           </div>
         ) : (
-          // UPDATED: gap-6 (increased from gap-4)
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 items-start">
-            {entries.map((entry, index) => (
-                <JournalItem 
-                    key={entry.id}
-                    index={index}
-                    entry={entry}
-                    isPaletteMode={isPaletteMode}
-                    isFalling={fallingIds.has(entry.id)}
-                    onSelect={onSelectEntry}
-                    onDelete={setDeleteConfirmId}
-                    onDragStart={handleDragStart}
-                    onDragOver={handleDragOver}
-                    onDrop={handleDrop}
-                    t={t}
-                />
-            ))}
-          </div>
+          <>
+            {/* Filter Empty State */}
+            {filteredEntries.length === 0 && activeFilter && (
+                <div className="h-[30vh] flex flex-col items-center justify-center text-white/30 animate-in fade-in zoom-in-95 duration-300">
+                    <Filter size={32} strokeWidth={1} className="mb-3 opacity-50" />
+                    <p className="font-serif-text text-xs tracking-wider">No colors found matching <span style={{color: COLOR_FILTERS.find(c => c.id === activeFilter)?.hex}}>{activeFilter.toUpperCase()}</span></p>
+                </div>
+            )}
+
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 items-start">
+                {filteredEntries.map((entry, index) => (
+                    // We use key=entry.id to allow React to handle reordering/filtering naturally
+                    <div key={entry.id} className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: `${index * 50}ms` }}>
+                        <JournalItem 
+                            index={index}
+                            entry={entry}
+                            isPaletteMode={isPaletteMode}
+                            isFalling={fallingIds.has(entry.id)}
+                            onSelect={onSelectEntry}
+                            onDelete={setDeleteConfirmId}
+                            onDragStart={handleDragStart}
+                            onDragOver={handleDragOver}
+                            onDrop={handleDrop}
+                            t={t}
+                        />
+                    </div>
+                ))}
+            </div>
+          </>
         )}
       </div>
 
