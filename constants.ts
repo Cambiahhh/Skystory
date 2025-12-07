@@ -1,17 +1,42 @@
 
-import { TargetLanguage, AppLanguage, FilterType, AspectRatio } from './types';
+import { TargetLanguage, AppLanguage, FilterType, AspectRatio, SkyCategory } from './types';
 
 export const GEMINI_MODEL = 'gemini-2.5-flash';
 
+// Updated System Instruction to force selection from the Lexicon
 export const SYSTEM_INSTRUCTION = `
-You are SkyStory, an artist and poet. Your goal is to capture the essence of the sky in a single, beautiful Polaroid-style caption.
-Do not teach. Do not explain. Just evoke emotion.
-Rules:
-1. Identify the cloud type or constellation based on the requested mode.
-2. Provide a "Poetic Expression" in the target language. This should be short, punchy, and emotional (max 15 words). Like a handwritten note on a photo.
-3. Provide a "Wisdom" (proverb/myth) that feels like a gallery caption.
-4. Output specific hex colors found in the image.
+You are SkyStory, a poetic sky curator. 
+Your task is to analyze the sky image and categorize it strictly.
+
+1. **Categorization**: You MUST classify the image into exactly ONE of the following categories:
+   - Clouds: 'Cumulus', 'Stratus', 'Cirrus', 'Nimbus', 'Contrail'
+   - Atmosphere: 'Clear', 'Sunrise', 'Sunset', 'Golden Hour', 'Blue Hour'
+   - Moon: 'Crescent Moon', 'Quarter Moon', 'Gibbous Moon', 'Full Moon'
+   Return this as the 'category' field.
+
+2. **Poetry**: Provide a "Poetic Expression" (max 15 words). Deep, romantic, emotional.
+3. **Wisdom**: Provide a weather proverb or myth related to the specific cloud/moon/sun type.
+4. **Colors**: Extract 3 hex codes for the gradient (Top to Horizon).
 `;
+
+// Mapping Categories to UI Labels (English & Chinese)
+export const CATEGORY_LABELS: Record<SkyCategory, { en: string, cn: string }> = {
+  [SkyCategory.CUMULUS]: { en: 'Cumulus', cn: '积云' },
+  [SkyCategory.STRATUS]: { en: 'Stratus', cn: '层云' },
+  [SkyCategory.CIRRUS]: { en: 'Cirrus', cn: '卷云' },
+  [SkyCategory.NIMBUS]: { en: 'Nimbus', cn: '雨云' },
+  [SkyCategory.CONTRAIL]: { en: 'Contrail', cn: '航迹' },
+  [SkyCategory.CLEAR]: { en: 'Clear', cn: '晴空' },
+  [SkyCategory.SUNRISE]: { en: 'Sunrise', cn: '日出' },
+  [SkyCategory.SUNSET]: { en: 'Sunset', cn: '日落' },
+  [SkyCategory.GOLDEN]: { en: 'Golden', cn: '金时刻' },
+  [SkyCategory.BLUE]: { en: 'Blue Hour', cn: '蓝时刻' },
+  [SkyCategory.CRESCENT]: { en: 'Crescent', cn: '蛾眉' },
+  [SkyCategory.QUARTER]: { en: 'Quarter', cn: '弦月' },
+  [SkyCategory.GIBBOUS]: { en: 'Gibbous', cn: '凸月' },
+  [SkyCategory.FULL]: { en: 'Full Moon', cn: '满月' },
+  [SkyCategory.UNKNOWN]: { en: 'Unknown', cn: '未知' },
+};
 
 export const LANGUAGES: { code: TargetLanguage; label: string; flag: string }[] = [
   { code: TargetLanguage.EN, label: 'Film: English', flag: 'EN' },
@@ -28,7 +53,6 @@ export const UI_LANGUAGES = [
   { code: AppLanguage.CN, label: '简体中文' },
 ];
 
-// Added 'css' property for html2canvas compatibility
 export const PHOTO_FILTERS = {
   [FilterType.ORIGINAL]: { 
     name: "Original", 
@@ -66,7 +90,7 @@ export const UI_TEXT = {
   [AppLanguage.EN]: {
     subtitle: "Turn the sky into poetry",
     cloudStory: "Cloud Story",
-    starStory: "Star Story",
+    starStory: "Star Story", // Kept in text but hidden in UI
     journal: "Journal",
     settings: "Settings",
     appLang: "App Language",
@@ -104,7 +128,7 @@ export const UI_TEXT = {
     },
     philosophy: {
       title: "To You, Looking Up",
-      content: "We live in a world that rushes forward, heads down, buried in screens and schedules.\n\nBut above us, there is a canvas that changes every second, yet has watched over us for eternity.\n\nSkyStory was built not just to identify clouds or stars, but to give you a reason to pause. To breathe. To find a moment of romance in the mundane.\n\nWe believe the sky is the world's oldest language. We just help you translate it.\n\nThank you for looking up with us.",
+      content: "We live in a world that rushes forward, heads down, buried in screens and schedules.\n\nBut above us, there is a canvas that changes every second, yet has watched over us for eternity.\n\nSkyStory was built not just to identify clouds, but to give you a reason to pause. To breathe. To find a moment of romance in the mundane.\n\nWe believe the sky is the world's oldest language. We just help you translate it.\n\nThank you for looking up with us.",
       contact: "Author WeChat: Cambia2214"
     },
     install: "Install App",
@@ -112,15 +136,17 @@ export const UI_TEXT = {
         welcome: "Welcome to SkyStory",
         welcomeDesc: "Swipe to learn how to read the sky.",
         step1Title: "Capture the Moment",
-        step1Desc: "Choose 'Daylight' for clouds or 'Midnight' for stars. Snap a photo to let AI translate the sky.",
+        step1Desc: "Point your camera at the sky. Whether it's clouds, a sunset, or the moon, AI will translate it.",
         step2Title: "Interactive Photo",
-        step2Desc: "Swipe Horizontally on the photo to change Aspect Ratio (1:1, 3:4, etc.). Swipe Vertically to change Filters.",
+        step2Desc: "Swipe Horizontally on the photo to change Aspect Ratio. Swipe Vertically to change Filters.",
         step3Title: "The Hidden Palette",
         step3Desc: "Swipe Left on the white frame (outside the photo) to reveal the Sky Palette and exact colors.",
         step4Title: "Your Journal",
-        step4Desc: "All memories are saved in your Journal. Tap any card in the journal to revisit it.",
+        step4Desc: "All memories are saved in your Journal. Filter them by Color or by Cloud Type.",
         done: "Start Exploring"
-    }
+    },
+    filterByColor: "Palette",
+    filterByType: "Collection"
   },
   [AppLanguage.CN]: {
     subtitle: "把天空变成最浪漫的诗",
@@ -163,7 +189,7 @@ export const UI_TEXT = {
     },
     philosophy: {
       title: "致每一个抬头看天的你",
-      content: "我们生活在一个匆忙的时代，\n大多数时候，我们低头赶路，\n沉浸在屏幕与日程表中。\n\n但在我们头顶，\n有一幅每秒钟都在变化的画卷，\n它沉默地注视了人类百万年。\n\nSkyStory 的诞生，\n不仅仅是为了识别云彩或星座，（星座部分正在加紧做！）\n更是为了给你一个停下来的理由。\n去呼吸，去在平凡的日常中寻找片刻的浪漫。\n\n我们相信，天空是世界上最古老的语言。\n我们只是帮你翻译了它。\n\n谢谢你，和我们一起抬头。",
+      content: "我们生活在一个匆忙的时代，\n大多数时候，我们低头赶路，\n沉浸在屏幕与日程表中。\n\n但在我们头顶，\n有一幅每秒钟都在变化的画卷，\n它沉默地注视了人类百万年。\n\nSkyStory 的诞生，\n不仅仅是为了识别云彩，\n更是为了给你一个停下来的理由。\n去呼吸，去在平凡的日常中寻找片刻的浪漫。\n\n我们相信，天空是世界上最古老的语言。\n我们只是帮你翻译了它。\n\n谢谢你，和我们一起抬头。",
       contact: "作者微信: Cambia2214"
     },
     install: "安装到桌面",
@@ -171,15 +197,17 @@ export const UI_TEXT = {
         welcome: "欢迎来到 SkyStory",
         welcomeDesc: "简单的手势，带你读懂天空。",
         step1Title: "捕捉瞬间",
-        step1Desc: "选择「云」或「星」模式，拍摄天空，让 AI 为你翻译此刻的浪漫。",
+        step1Desc: "将镜头对准天空——无论是云朵、落日还是月亮，AI 都会为你翻译此刻的浪漫。",
         step2Title: "照片互动",
-        step2Desc: "在照片区域左右滑动切换比例 (1:1, 3:4...)；上下滑动切换胶片滤镜。",
+        step2Desc: "在照片区域左右滑动切换比例；上下滑动切换胶片滤镜。",
         step3Title: "隐藏色卡",
         step3Desc: "在照片框外向左滑动，即可翻转卡片，查看专属的天空色卡与数据。",
         step4Title: "天空手账",
-        step4Desc: "所有记忆都会保存在手账中。在手账页点击卡片可重新进入查看。",
+        step4Desc: "所有记忆都会保存在手账中。你可以通过「颜色」或「标本类型」来筛选它们。",
         done: "开始探索"
-    }
+    },
+    filterByColor: "色卡",
+    filterByType: "标本集"
   }
 };
 

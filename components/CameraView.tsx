@@ -1,14 +1,18 @@
+
 import React, { useRef, useState, useEffect } from 'react';
 import { ArrowLeft, Image as ImageIcon, SwitchCamera } from 'lucide-react';
+import { SkyMode } from '../types';
 
 interface CameraViewProps {
   onImageSelected: (file: File) => void;
   onBack: () => void;
+  mode?: SkyMode; 
 }
 
 const CameraView: React.FC<CameraViewProps> = ({ 
   onImageSelected, 
-  onBack
+  onBack,
+  mode = SkyMode.CLOUD
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -51,14 +55,6 @@ const CameraView: React.FC<CameraViewProps> = ({
       const allDevices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = allDevices.filter(d => d.kind === 'videoinput');
       setDevices(videoDevices);
-
-      // If we just started up and haven't selected a specific device index yet,
-      // try to sync the index with the active track if possible, or just default to 0.
-      if (!deviceId && videoDevices.length > 0) {
-        // Try to find the one we are using, or default. 
-        // This is a bit tricky as constraints 'environment' is fuzzy.
-        // For simplicity, we just set the list.
-      }
 
     } catch (err) {
       console.error("Camera error", err);
@@ -162,14 +158,16 @@ const CameraView: React.FC<CameraViewProps> = ({
         )}
       </div>
 
+      {/* No Star Overlay anymore */}
+
       <canvas ref={canvasRef} className="hidden" />
       <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
 
       {/* UI Overlay */}
-      <div className="absolute inset-0 z-10 flex flex-col justify-between p-6">
+      <div className="absolute inset-0 z-10 flex flex-col justify-between p-6 pointer-events-none">
         
-        {/* Top Bar */}
-        <div className="w-full flex justify-between items-start">
+        {/* Top Bar - Pointer events auto to allow clicks */}
+        <div className="w-full flex justify-between items-start pointer-events-auto">
             <button onClick={onBack} className="p-2 rounded-full bg-black/20 text-white/70 hover:bg-black/40 backdrop-blur-sm transition">
                 <ArrowLeft size={24} />
             </button>
@@ -191,8 +189,8 @@ const CameraView: React.FC<CameraViewProps> = ({
 
         {/* Center: Clean view */}
 
-        {/* Bottom Bar */}
-        <div className="w-full relative flex flex-col items-center">
+        {/* Bottom Bar - Pointer events auto */}
+        <div className="w-full relative flex flex-col items-center pointer-events-auto">
             
             <div className="absolute bottom-0 left-0 w-8 h-8 border-b border-l border-white/60 pointer-events-none opacity-50"></div>
             <div className="absolute bottom-0 right-0 w-8 h-8 border-b border-r border-white/60 pointer-events-none opacity-50"></div>

@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { SkyAnalysisResult, TargetLanguage, SkyMode } from '../types';
+import { SkyAnalysisResult, TargetLanguage, SkyMode, SkyCategory } from '../types';
 import { GEMINI_MODEL, SYSTEM_INSTRUCTION } from '../constants';
 
 // Initialize the API client. 
@@ -20,15 +20,14 @@ export const analyzeSkyImage = async (
 ): Promise<SkyAnalysisResult> => {
   
   try {
-    const modeInstruction = mode === SkyMode.CLOUD 
-      ? "Focus on clouds, sunlight, and atmospheric mood." 
-      : "Focus on stars, constellations, moon phases, and the darkness of the void.";
-
+    // We simplified mode to just one instruction since Star mode is technically merged/deprecated
     const prompt = `
-      Analyze this image of the sky. Mode: ${modeInstruction}.
+      Analyze this image of the sky. 
+      Identify if it contains clouds, sun events (sunrise/sunset), or moon phases.
       The target language is ${language}.
       Return a JSON object.
       IMPORTANT: For 'dominantColors', extract 3 hex codes specifically representing the sky gradient, ordered from the TOP of the sky to the HORIZON (Bottom).
+      IMPORTANT: For 'category', you MUST select exactly one value from the provided list that best matches the image.
     `;
 
     const generatePromise = ai.models.generateContent({
@@ -52,11 +51,19 @@ export const analyzeSkyImage = async (
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            type: { type: Type.STRING, enum: ['cloud', 'constellation', 'celestial_event', 'unknown'] },
-            scientificName: { type: Type.STRING, description: "Scientific name e.g., 'Cumulus Congestus' or 'Orion'" },
+            category: { 
+              type: Type.STRING, 
+              enum: [
+                'Cumulus', 'Stratus', 'Cirrus', 'Nimbus', 'Contrail',
+                'Clear', 'Sunrise', 'Sunset', 'Golden Hour', 'Blue Hour',
+                'Crescent Moon', 'Quarter Moon', 'Gibbous Moon', 'Full Moon',
+                'Unknown'
+              ] 
+            },
+            scientificName: { type: Type.STRING, description: "Scientific name e.g., 'Cumulus Congestus' or 'Waxing Gibbous'" },
             translatedName: { type: Type.STRING, description: "Name in the target language" },
             poeticExpression: { type: Type.STRING, description: "A highly romantic, poetic sentence describing this specific sky in the target language." },
-            proverb: { type: Type.STRING, description: "A weather proverb or short myth in the target language." },
+            proverb: { type: Type.STRING, description: "A weather proverb or short myth in the target language related to this category." },
             proverbTranslation: { type: Type.STRING, description: "English translation of the proverb/myth for reference." },
             dominantColors: { 
               type: Type.ARRAY, 
@@ -64,7 +71,7 @@ export const analyzeSkyImage = async (
               description: "Array of 3 hex color codes representing the sky gradient from top to bottom" 
             }
           },
-          required: ['type', 'scientificName', 'translatedName', 'poeticExpression', 'proverb', 'dominantColors']
+          required: ['category', 'scientificName', 'translatedName', 'poeticExpression', 'proverb', 'dominantColors']
         }
       }
     });
@@ -83,8 +90,15 @@ export const analyzeSkyImage = async (
 
     const data = JSON.parse(cleanedText) as Omit<SkyAnalysisResult, 'timestamp' | 'imageUrl' | 'language'>;
     
+    // Ensure category is a valid enum, fallback to UNKNOWN if model hallucinates (rare with schema)
+    let category = data.category as SkyCategory;
+    if (!Object.values(SkyCategory).includes(category)) {
+      category = SkyCategory.UNKNOWN;
+    }
+
     return {
       ...data,
+      category,
       timestamp: Date.now(),
       imageUrl: `data:image/jpeg;base64,${base64Image}`,
       language: language
@@ -94,7 +108,7 @@ export const analyzeSkyImage = async (
     console.error("SkyStory Analysis Error:", error);
     // Return a backup object so the UI doesn't crash, but logged the error.
     return {
-      type: 'unknown',
+      category: SkyCategory.UNKNOWN,
       scientificName: 'Mystery of the Sky',
       translatedName: 'Unknown Beauty',
       poeticExpression: 'The sky whispers secrets we cannot yet understand.',

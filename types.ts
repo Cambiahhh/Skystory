@@ -9,7 +9,8 @@ export enum AppView {
 
 export enum SkyMode {
   CLOUD = 'CLOUD',
-  STAR = 'STAR'
+  // STAR mode is deprecated/hidden for now as per request
+  STAR = 'STAR' 
 }
 
 // Language for the Generated Content (Poetry)
@@ -29,17 +30,42 @@ export enum AppLanguage {
   CN = 'CN'
 }
 
+// The Strict Lexicon for Sky Classification
+export enum SkyCategory {
+  // Clouds
+  CUMULUS = 'Cumulus', // 积云 (Heap)
+  STRATUS = 'Stratus', // 层云 (Layer)
+  CIRRUS = 'Cirrus',   // 卷云 (Curl)
+  NIMBUS = 'Nimbus',   // 雨云 (Rain)
+  CONTRAIL = 'Contrail', // 飞机云
+  
+  // Sun / Atmosphere
+  CLEAR = 'Clear',     // 晴空
+  SUNRISE = 'Sunrise', // 日出
+  SUNSET = 'Sunset',   // 日落
+  GOLDEN = 'Golden Hour', // 金时刻
+  BLUE = 'Blue Hour',     // 蓝时刻
+  
+  // Moon (Added as requested)
+  CRESCENT = 'Crescent Moon', // 蛾眉月/残月
+  QUARTER = 'Quarter Moon',   // 上/下弦月
+  GIBBOUS = 'Gibbous Moon',   // 凸月
+  FULL = 'Full Moon',         // 满月
+  
+  UNKNOWN = 'Unknown'
+}
+
 export interface SkyAnalysisResult {
-  type: 'cloud' | 'constellation' | 'celestial_event' | 'unknown';
-  scientificName: string;
-  translatedName: string; // In target language
-  poeticExpression: string; // In target language
-  proverb: string; // Weather wisdom or myth
-  proverbTranslation: string; // In English/Native for reference
+  category: SkyCategory; // Strict category from Lexicon
+  scientificName: string; // Specific name (e.g., Altocumulus)
+  translatedName: string; 
+  poeticExpression: string; 
+  proverb: string; 
+  proverbTranslation: string; 
   dominantColors: string[];
   timestamp: number;
   imageUrl?: string;
-  language: TargetLanguage; // Track the language of this specific result
+  language: TargetLanguage; 
 }
 
 export enum FilterType {
@@ -54,15 +80,16 @@ export enum FilterType {
 export interface JournalEntry extends Partial<SkyAnalysisResult> {
   id: string;
   status: 'pending' | 'completed' | 'failed';
-  imageUrl: string; // Image is always present
-  filter?: FilterType; // Saved filter choice
+  imageUrl: string; 
+  filter?: FilterType; 
+  type?: string;
 }
 
 export type AspectRatio = '2:3' | '3:4' | '1:1' | '4:3' | '3:2';
 
 export interface AppSettings {
   appLanguage: AppLanguage;
-  cardLanguage: TargetLanguage; // Renamed from defaultFilmStock
+  cardLanguage: TargetLanguage; 
   saveToDevice: boolean;
   aspectRatio: AspectRatio;
 }

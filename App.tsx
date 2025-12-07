@@ -236,6 +236,7 @@ export const App: React.FC = () => {
         <CameraView 
           onImageSelected={handleImageSelected} 
           onBack={handleBackToHome}
+          mode={mode} // Pass the mode here
         />
       )}
 

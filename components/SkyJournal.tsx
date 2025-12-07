@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { JournalEntry, AppLanguage } from '../types';
-import { X, Aperture, AlertCircle, Loader2, Trash2, AlertTriangle, Palette, Image as ImageIcon, Filter } from 'lucide-react';
-import { UI_TEXT } from '../constants';
+import { JournalEntry, AppLanguage, SkyCategory } from '../types';
+import { X, Aperture, AlertCircle, Loader2, Trash2, AlertTriangle, Palette, Image as ImageIcon, Filter, Tag } from 'lucide-react';
+import { UI_TEXT, CATEGORY_LABELS } from '../constants';
 
 interface SkyJournalProps {
   entries: JournalEntry[];
@@ -81,16 +81,20 @@ const getColorCategory = (hex: string): ColorCategory => {
     return 'gray'; // Fallback
 };
 
-// Check if an entry matches the selected filter
-const matchesFilter = (entry: JournalEntry, filter: ColorCategory | null): boolean => {
+// Check if an entry matches the selected color filter
+const matchesColorFilter = (entry: JournalEntry, filter: ColorCategory | null): boolean => {
     if (!filter) return true;
     if (!entry.dominantColors) return false;
-    
-    // If any of the 3 dominant colors matches the category
     return entry.dominantColors.some(hex => getColorCategory(hex) === filter);
 };
 
-// --- End Color Helper Logic ---
+// Check if entry matches category filter
+const matchesCategoryFilter = (entry: JournalEntry, filter: SkyCategory | null): boolean => {
+    if (!filter) return true;
+    return entry.category === filter;
+}
+
+// --- End Helper Logic ---
 
 // Sub-component for individual journal items
 const JournalItem: React.FC<{
@@ -104,13 +108,12 @@ const JournalItem: React.FC<{
     onDragOver: (e: React.DragEvent, index: number) => void;
     onDrop: (e: React.DragEvent, index: number) => void;
     t: any;
-}> = ({ entry, index, isPaletteMode, isFalling, onSelect, onDelete, onDragStart, onDragOver, onDrop, t }) => {
+    appLang: AppLanguage;
+}> = ({ entry, index, isPaletteMode, isFalling, onSelect, onDelete, onDragStart, onDragOver, onDrop, t, appLang }) => {
     
-    // Rotation State (Degrees)
     const [rotation, setRotation] = useState(0);
     const [isHandleHovered, setIsHandleHovered] = useState(false);
     
-    // Generate a unique, deterministic random seed for this entry based on its ID
     const tapeVisuals = useMemo(() => {
         const seed = entry.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
         const pseudoRandom = (offset: number) => {
@@ -118,60 +121,29 @@ const JournalItem: React.FC<{
             return x - Math.floor(x);
         };
 
-        // Generate jagged polygon path for realistic torn tape
         let poly = "polygon(";
-        
-        // Top Edge (Straight-ish but imperfect)
-        for (let i = 0; i <= 10; i++) {
-            const x = i * 10;
-            const y = 0 + (pseudoRandom(i) * 5); // 0% to 5% variation
-            poly += `${x}% ${y}%, `;
-        }
-        
-        // Right Edge (Jagged)
-        for (let i = 0; i <= 5; i++) {
-            const y = i * 20; 
-            const x = 100 - (pseudoRandom(i + 10) * 8); // 92% to 100%
-            poly += `${x}% ${y}%, `;
-        }
-
-        // Bottom Edge (Straight-ish)
-        for (let i = 10; i >= 0; i--) {
-            const x = i * 10;
-            const y = 100 - (pseudoRandom(i + 20) * 5); // 95% to 100%
-            poly += `${x}% ${y}%, `;
-        }
-
-        // Left Edge (Jagged)
-        for (let i = 5; i >= 0; i--) {
-            const y = i * 20;
-            const x = 0 + (pseudoRandom(i + 30) * 8); // 0% to 8%
-            poly += `${x}% ${y}%${i === 0 ? '' : ', '}`;
-        }
-        
+        for (let i = 0; i <= 10; i++) poly += `${i * 10}% ${0 + (pseudoRandom(i) * 5)}%, `;
+        for (let i = 0; i <= 5; i++) poly += `${100 - (pseudoRandom(i + 10) * 8)}% ${i * 20}%, `;
+        for (let i = 10; i >= 0; i--) poly += `${i * 10}% ${100 - (pseudoRandom(i + 20) * 5)}%, `;
+        for (let i = 5; i >= 0; i--) poly += `${0 + (pseudoRandom(i + 30) * 8)}% ${i * 20}%${i === 0 ? '' : ', '}`;
         poly += ")";
 
-        // Random rotation for the placement (-1.5deg to 1.5deg) - subtle natural tilt
         const tilt = (pseudoRandom(100) * 3) - 1.5; 
 
         return { clipPath: poly, transform: `translateX(-50%) rotate(${tilt}deg)` };
     }, [entry.id]);
 
-    // Sync with global mode
     useEffect(() => {
         if (isPaletteMode) {
-            // Default to 'Back' view. We use +180 (CW) as standard flip.
             setRotation(180);
         } else {
             setRotation(0);
         }
     }, [isPaletteMode]);
 
-    // Physics constants for falling animation
     const fallRotation = useRef(Math.random() * 60 - 30); 
     const fallX = useRef((Math.random() - 0.5) * 160);
 
-    // Gesture State
     const touchStartRef = useRef<number | null>(null);
 
     const handleTouchStart = (e: React.TouchEvent) => {
@@ -187,18 +159,12 @@ const JournalItem: React.FC<{
         const SWIPE_THRESHOLD = 40; 
 
         if (Math.abs(diffX) > SWIPE_THRESHOLD) {
-             if (diffX > 0) {
-                 // Left -> Right Swipe (L->R): CW (+)
-                 setRotation(r => r + 180);
-             } else {
-                 // Right -> Left Swipe (R->L): CCW (-)
-                 setRotation(r => r - 180);
-             }
+             if (diffX > 0) setRotation(r => r + 180);
+             else setRotation(r => r - 180);
         }
         touchStartRef.current = null;
     };
 
-    // Only allow drag if starting from the tape handle
     const handleDragStartInternal = (e: React.DragEvent) => {
         if (!isHandleHovered) {
             e.preventDefault();
@@ -209,7 +175,6 @@ const JournalItem: React.FC<{
 
     const toggleFlip = (e: React.MouseEvent) => {
         e.stopPropagation();
-        // Tap to flip: Default to CW (+)
         setRotation(r => r + 180);
     };
 
@@ -241,7 +206,6 @@ const JournalItem: React.FC<{
                     onClick={() => entry.status === 'completed' && onSelect(entry)}
                     className={`backface-hidden bg-white p-2 pb-4 shadow-xl rounded-[2px] relative overflow-visible ${entry.status === 'completed' ? 'cursor-pointer' : 'opacity-80'}`}
                 >
-                    {/* Processing Overlay */}
                     {entry.status === 'pending' && (
                         <div className="absolute inset-0 z-20 bg-black/10 backdrop-blur-[1px] flex flex-col items-center justify-center gap-2 rounded-[2px]">
                             <Loader2 size={20} className="text-slate-800 animate-spin" />
@@ -249,10 +213,8 @@ const JournalItem: React.FC<{
                         </div>
                     )}
                     
-                    {/* --- Controls Layer --- */}
                     {!isFalling && (
                         <>
-                            {/* Realistic Washi Tape Handle - UPDATED: w-6 (was w-24) */}
                             <div 
                                 onMouseEnter={() => setIsHandleHovered(true)}
                                 onMouseLeave={() => setIsHandleHovered(false)}
@@ -265,12 +227,10 @@ const JournalItem: React.FC<{
                                     className="w-full h-full bg-white/30 backdrop-blur-md shadow-sm transition-opacity hover:bg-white/40"
                                     style={{ clipPath: tapeVisuals.clipPath }}
                                 >
-                                    {/* Subtle texture for tape */}
                                     <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent opacity-50"></div>
                                 </div>
                             </div>
 
-                            {/* Delete Button (Top Right) */}
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
@@ -306,7 +266,9 @@ const JournalItem: React.FC<{
                                         {new Date(Number(entry.id)).toLocaleDateString()}
                                     </span>
                                     <span className="text-[7px] text-slate-400 font-serif-text uppercase truncate max-w-[50px]">
-                                    {entry.type}
+                                    {entry.category && entry.category !== SkyCategory.UNKNOWN 
+                                        ? (appLang === 'CN' ? CATEGORY_LABELS[entry.category]?.cn : CATEGORY_LABELS[entry.category]?.en)
+                                        : (entry.type || 'Unknown')}
                                     </span>
                                 </div>
                             </>
@@ -340,7 +302,6 @@ const JournalItem: React.FC<{
                              <span className="font-serif-display text-[10px] text-white tracking-[0.15em] drop-shadow-sm mt-0.5">SkyStory</span>
                         </div>
                      </div>
-                     {/* Overlay for softness */}
                      <div className="absolute inset-0 bg-white/5 mix-blend-soft-light pointer-events-none"></div>
                      <div className="absolute inset-0 border border-white/10 pointer-events-none"></div>
                 </div>
@@ -356,11 +317,13 @@ const SkyJournal: React.FC<SkyJournalProps> = ({ entries, onClose, onSelectEntry
   const [fallingIds, setFallingIds] = useState<Set<string>>(new Set());
   const [isPaletteMode, setIsPaletteMode] = useState(false);
   
-  // Filter State
-  const [showFilter, setShowFilter] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<ColorCategory | null>(null);
+  // Filter States
+  const [showFilterDrawer, setShowFilterDrawer] = useState(false);
+  const [filterMode, setFilterMode] = useState<'color' | 'type'>('color'); // Switch between Color and Specimen Type
+  
+  const [activeColorFilter, setActiveColorFilter] = useState<ColorCategory | null>(null);
+  const [activeTypeFilter, setActiveTypeFilter] = useState<SkyCategory | null>(null);
 
-  // Drag State
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
   const confirmDelete = () => {
@@ -401,10 +364,25 @@ const SkyJournal: React.FC<SkyJournalProps> = ({ entries, onClose, onSelectEntry
       setDraggedIndex(null);
   };
 
-  // Filtered Entries Calculation
+  // Filter Calculation
   const filteredEntries = useMemo(() => {
-    return entries.filter(entry => matchesFilter(entry, activeFilter));
-  }, [entries, activeFilter]);
+    return entries.filter(entry => {
+        if (filterMode === 'color') {
+            return matchesColorFilter(entry, activeColorFilter);
+        } else {
+            return matchesCategoryFilter(entry, activeTypeFilter);
+        }
+    });
+  }, [entries, filterMode, activeColorFilter, activeTypeFilter]);
+
+  // Extract available categories from current entries to only show relevant filters
+  const availableCategories = useMemo(() => {
+      const cats = new Set<SkyCategory>();
+      entries.forEach(e => {
+          if (e.category && e.category !== SkyCategory.UNKNOWN) cats.add(e.category);
+      });
+      return Array.from(cats).sort();
+  }, [entries]);
 
   return (
     <div className="fixed inset-0 z-40 bg-[#0a0a0a] overflow-y-auto overflow-x-hidden animate-in slide-in-from-bottom-10 duration-500 font-sans">
@@ -418,14 +396,14 @@ const SkyJournal: React.FC<SkyJournalProps> = ({ entries, onClose, onSelectEntry
                 
                 {/* Filter Toggle */}
                 <button 
-                    onClick={() => setShowFilter(!showFilter)}
+                    onClick={() => setShowFilterDrawer(!showFilterDrawer)}
                     className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all ${
-                        activeFilter || showFilter 
+                        activeColorFilter || activeTypeFilter || showFilterDrawer 
                         ? 'bg-white text-black border-white' 
                         : 'bg-transparent text-white/60 border-white/20 hover:border-white/50'
                     }`}
                 >
-                    <Filter size={14} fill={activeFilter ? "currentColor" : "none"} />
+                    <Filter size={14} fill={activeColorFilter || activeTypeFilter ? "currentColor" : "none"} />
                 </button>
 
                 {/* Palette Toggle */}
@@ -448,46 +426,81 @@ const SkyJournal: React.FC<SkyJournalProps> = ({ entries, onClose, onSelectEntry
             </div>
           </div>
 
-          {/* Color Filter Drawer */}
+          {/* Filter Drawer */}
           <div 
-             className={`w-full overflow-hidden transition-all duration-500 ease-in-out ${showFilter ? 'max-h-24 opacity-100 border-t border-white/5' : 'max-h-0 opacity-0'}`}
+             className={`w-full overflow-hidden transition-all duration-500 ease-in-out ${showFilterDrawer ? 'max-h-32 opacity-100 border-t border-white/5' : 'max-h-0 opacity-0'}`}
           >
-              <div className="px-6 py-4 flex gap-4 overflow-x-auto no-scrollbar items-center">
-                  <span className="text-[10px] text-white/40 font-mono uppercase tracking-wider whitespace-nowrap">Filter:</span>
-                  {COLOR_FILTERS.map(color => (
-                      <button
-                        key={color.id}
-                        onClick={() => setActiveFilter(activeFilter === color.id ? null : color.id)}
-                        className={`group relative flex flex-col items-center gap-1.5 min-w-[32px]`}
-                      >
-                         <div 
-                            className={`w-6 h-6 rounded-full border transition-all duration-300 ${
-                                activeFilter === color.id 
-                                ? 'scale-110 border-white shadow-[0_0_10px_rgba(255,255,255,0.5)]' 
-                                : 'scale-100 border-transparent hover:scale-110 opacity-70 hover:opacity-100'
-                            }`}
-                            style={{ backgroundColor: color.hex, borderColor: color.id === 'white' || color.id === 'black' ? '#ffffff30' : undefined }}
-                         ></div>
-                         {activeFilter === color.id && (
-                             <span className="absolute -bottom-4 text-[8px] text-white/80 font-mono tracking-widest uppercase animate-in slide-in-from-top-1 fade-in">
-                                 {appLang === 'CN' ? color.label[0] : color.label}
-                             </span>
-                         )}
-                      </button>
-                  ))}
-                  {activeFilter && (
+              <div className="flex flex-col w-full">
+                  {/* Mode Switcher inside Drawer */}
+                  <div className="px-6 py-2 flex gap-4 border-b border-white/5">
                       <button 
-                        onClick={() => setActiveFilter(null)}
-                        className="ml-2 px-3 py-1 text-[9px] border border-white/20 rounded-full text-white/50 hover:text-white hover:border-white transition-colors uppercase tracking-wider"
+                        onClick={() => { setFilterMode('color'); setActiveTypeFilter(null); }}
+                        className={`text-[10px] uppercase tracking-widest transition-colors ${filterMode === 'color' ? 'text-white font-bold' : 'text-white/40'}`}
                       >
-                          Clear
+                          {t.filterByColor}
                       </button>
-                  )}
+                      <button 
+                        onClick={() => { setFilterMode('type'); setActiveColorFilter(null); }}
+                        className={`text-[10px] uppercase tracking-widest transition-colors ${filterMode === 'type' ? 'text-white font-bold' : 'text-white/40'}`}
+                      >
+                          {t.filterByType}
+                      </button>
+                  </div>
+
+                  {/* Filter Content */}
+                  <div className="px-6 py-4 flex gap-4 overflow-x-auto no-scrollbar items-center">
+                      
+                      {/* COLOR MODE */}
+                      {filterMode === 'color' && COLOR_FILTERS.map(color => (
+                          <button
+                            key={color.id}
+                            onClick={() => setActiveColorFilter(activeColorFilter === color.id ? null : color.id)}
+                            className={`group relative flex flex-col items-center gap-1.5 min-w-[32px]`}
+                          >
+                             <div 
+                                className={`w-6 h-6 rounded-full border transition-all duration-300 ${
+                                    activeColorFilter === color.id 
+                                    ? 'scale-110 border-white shadow-[0_0_10px_rgba(255,255,255,0.5)]' 
+                                    : 'scale-100 border-transparent hover:scale-110 opacity-70 hover:opacity-100'
+                                }`}
+                                style={{ backgroundColor: color.hex, borderColor: color.id === 'white' || color.id === 'black' ? '#ffffff30' : undefined }}
+                             ></div>
+                          </button>
+                      ))}
+
+                      {/* TYPE MODE (Specimen Tags) */}
+                      {filterMode === 'type' && (
+                          availableCategories.length > 0 ? availableCategories.map(cat => (
+                              <button
+                                key={cat}
+                                onClick={() => setActiveTypeFilter(activeTypeFilter === cat ? null : cat)}
+                                className={`px-3 py-1.5 rounded border text-[10px] font-serif-text uppercase tracking-wider whitespace-nowrap transition-all ${
+                                    activeTypeFilter === cat
+                                    ? 'bg-white text-black border-white'
+                                    : 'bg-white/5 text-white/60 border-white/10 hover:border-white/30'
+                                }`}
+                              >
+                                  {appLang === 'CN' ? CATEGORY_LABELS[cat]?.cn : CATEGORY_LABELS[cat]?.en}
+                              </button>
+                          )) : (
+                              <span className="text-white/30 text-[10px] italic">Collect more skies to unlock types.</span>
+                          )
+                      )}
+
+                      {(activeColorFilter || activeTypeFilter) && (
+                          <button 
+                            onClick={() => { setActiveColorFilter(null); setActiveTypeFilter(null); }}
+                            className="ml-2 px-3 py-1 text-[9px] border border-white/20 rounded-full text-white/50 hover:text-white hover:border-white transition-colors uppercase tracking-wider whitespace-nowrap"
+                          >
+                              Clear
+                          </button>
+                      )}
+                  </div>
               </div>
           </div>
       </div>
 
-      {!showFilter && (
+      {!showFilterDrawer && (
         <div className="px-6 pt-6 pb-2">
             <div className="bg-blue-900/10 border border-blue-500/20 rounded-lg p-3 flex gap-3 items-start">
                 <AlertCircle size={16} className="text-blue-400 mt-0.5 shrink-0" />
@@ -507,16 +520,15 @@ const SkyJournal: React.FC<SkyJournalProps> = ({ entries, onClose, onSelectEntry
         ) : (
           <>
             {/* Filter Empty State */}
-            {filteredEntries.length === 0 && activeFilter && (
+            {filteredEntries.length === 0 && (activeColorFilter || activeTypeFilter) && (
                 <div className="h-[30vh] flex flex-col items-center justify-center text-white/30 animate-in fade-in zoom-in-95 duration-300">
                     <Filter size={32} strokeWidth={1} className="mb-3 opacity-50" />
-                    <p className="font-serif-text text-xs tracking-wider">No colors found matching <span style={{color: COLOR_FILTERS.find(c => c.id === activeFilter)?.hex}}>{activeFilter.toUpperCase()}</span></p>
+                    <p className="font-serif-text text-xs tracking-wider">No specimens found.</p>
                 </div>
             )}
 
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 items-start">
                 {filteredEntries.map((entry, index) => (
-                    // We use key=entry.id to allow React to handle reordering/filtering naturally
                     <div key={entry.id} className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: `${index * 50}ms` }}>
                         <JournalItem 
                             index={index}
@@ -529,6 +541,7 @@ const SkyJournal: React.FC<SkyJournalProps> = ({ entries, onClose, onSelectEntry
                             onDragOver={handleDragOver}
                             onDrop={handleDrop}
                             t={t}
+                            appLang={appLang}
                         />
                     </div>
                 ))}
