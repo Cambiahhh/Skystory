@@ -26,31 +26,21 @@ const getEnvVar = (key: string): string | undefined => {
 
 // 1. Google Gemini Config
 const geminiApiKey = getEnvVar('GEMINI_API_KEY') || getEnvVar('API_KEY');
-// Initialize conditionally to avoid errors if key is missing but we intend to use Zhipu
-const googleAI = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
+// Allow custom Base URL if user uses a proxy service specifically, but standard VPN uses default URL
+const geminiBaseUrl = getEnvVar('GEMINI_BASE_URL'); 
+
+const googleAI = geminiApiKey ? new GoogleGenAI({ 
+    apiKey: geminiApiKey, 
+    baseUrl: geminiBaseUrl 
+} as any) : null;
 
 // 2. Zhipu AI Config
 const zhipuApiKey = getEnvVar('ZHIPU_API_KEY');
 
 // Helper: Timeout Promise
-const timeoutPromise = (ms: number) => new Promise<never>((_, reject) => {
-  setTimeout(() => reject(new Error("Request timed out")), ms);
+const timeoutPromise = (ms: number, name: string) => new Promise<never>((_, reject) => {
+  setTimeout(() => reject(new Error(`${name} Request timed out after ${ms}ms`)), ms);
 });
-
-// Helper: Detect if user is likely in China based on Timezone
-const isLikelyChina = (): boolean => {
-  try {
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (!timeZone) return false;
-    return timeZone === 'Asia/Shanghai' || 
-           timeZone === 'Asia/Urumqi' || 
-           timeZone === 'Asia/Chongqing' || 
-           timeZone === 'Asia/Harbin' ||
-           timeZone === 'PRC'; // Legacy
-  } catch (e) {
-    return false;
-  }
-};
 
 // --- API Implementation: Gemini ---
 
@@ -59,6 +49,8 @@ const callGeminiAI = async (
   prompt: string
 ): Promise<string> => {
   if (!googleAI) throw new Error("Gemini API Key is missing");
+
+  // console.log(`[SkyStory] Attempting Gemini...`);
 
   const response = await googleAI.models.generateContent({
     model: GEMINI_MODEL,
@@ -102,10 +94,7 @@ const callZhipuAI = async (
   base64Image: string,
   prompt: string
 ): Promise<string> => {
-  // Final check before call
-  if (!zhipuApiKey) {
-      throw new Error("Configuration Error: ZHIPU_API_KEY is missing. Please set this variable to use the app in China.");
-  }
+  if (!zhipuApiKey) throw new Error("ZHIPU_API_KEY is missing");
 
   console.log("[SkyStory] Calling Zhipu AI...");
   const url = "https://open.bigmodel.cn/api/paas/v4/chat/completions";
@@ -143,13 +132,10 @@ const callZhipuAI = async (
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error(`[SkyStory] Zhipu API Error (${response.status}):`, errText);
       throw new Error(`Zhipu API Error: ${response.status} ${errText}`);
     }
 
     const data = await response.json();
-    console.log("[SkyStory] Zhipu Response Received", data);
-
     const content = data.choices?.[0]?.message?.content;
     if (!content) throw new Error("Empty response from Zhipu");
     
@@ -182,61 +168,66 @@ export const analyzeSkyImage = async (
         "poeticExpression": "Max 15 words poetic description in target language",
         "proverb": "Weather proverb/myth in target language",
         "proverbTranslation": "English translation of proverb",
-        "dominantColors": ["#hex1", "#hex2", "#hex3"] (Top to bottom gradient)
+        "dominantColors: ["#hex1", "#hex2", "#hex3"] (Top to bottom gradient)
       }
     `;
 
-    // 1. Detect Strategy
-    const inChina = isLikelyChina();
-    
-    // Zhipu requires full Data URL
     const dataUrl = `data:image/jpeg;base64,${base64Image}`;
-    
     let resultText = "";
+    let usedModel = "None";
 
-    console.log(`[SkyStory] Location: ${inChina ? 'China' : 'Global'}`);
-    console.log(`[SkyStory] Keys Present - Gemini: ${!!geminiApiKey}, Zhipu: ${!!zhipuApiKey}`);
-
-    // LOGIC:
-    // 1. If in China -> MUST use Zhipu. If no key, fail loudly (don't try Gemini, it will timeout).
-    // 2. If Global -> Use Gemini if available. If not, try Zhipu.
+    // --- NEW STRATEGY: VPN DETECTION (Try Fail) ---
+    // 1. Try Gemini first (Best Quality).
+    // 2. If it works, great.
+    // 3. If it times out or fails (likely no VPN), switch to Zhipu.
     
-    if (inChina) {
-        console.log("[SkyStory] Strategy: Forced Zhipu AI (China Region)");
-        if (!zhipuApiKey) {
-            // Throwing specific error to be caught by UI
-            throw new Error("检测到中国地区，但未配置 ZHIPU_API_KEY。无法访问 Google 服务，请配置智谱 Key。");
-        }
-        resultText = await Promise.race([
-            callZhipuAI(dataUrl, prompt),
-            timeoutPromise(60000)
-        ]);
-    } else {
-        // Global
-        if (googleAI) {
-            console.log("[SkyStory] Strategy: Gemini AI");
+    const canUseGemini = !!googleAI;
+    const canUseZhipu = !!zhipuApiKey;
+
+    if (canUseGemini) {
+        try {
+            console.log("[SkyStory] Trying Gemini (VPN check)...");
+            // Set a timeout of 10 seconds. 
+            // If user has VPN, it usually connects in 1-3s. 
+            // If no VPN, it hangs, so we kill it at 10s to switch to Zhipu.
             resultText = await Promise.race([
                 callGeminiAI(base64Image, prompt),
-                timeoutPromise(45000)
+                timeoutPromise(10000, "Gemini") 
             ]);
-        } else if (zhipuApiKey) {
-            console.log("[SkyStory] Strategy: Fallback Zhipu AI (No Gemini Key)");
-            resultText = await Promise.race([
-                callZhipuAI(dataUrl, prompt),
-                timeoutPromise(60000)
-            ]);
-        } else {
-            throw new Error("No API Keys configured (Gemini or Zhipu).");
+            usedModel = "Gemini";
+            console.log("[SkyStory] Gemini Connected Successfully.");
+        } catch (geminiError: any) {
+            console.warn("[SkyStory] Gemini unreachable (VPN off? or Timeout). Switching to Fallback.", geminiError.message);
+            
+            if (canUseZhipu) {
+                 console.log("[SkyStory] Fallback: Using Zhipu AI.");
+                 resultText = await Promise.race([
+                    callZhipuAI(dataUrl, prompt),
+                    timeoutPromise(45000, "Zhipu")
+                ]);
+                usedModel = "Zhipu";
+            } else {
+                // If Zhipu key is also missing, we have to throw the original Gemini error
+                throw new Error("Connection failed. Please enable VPN for Gemini, or configure ZHIPU_API_KEY.");
+            }
         }
+    } else if (canUseZhipu) {
+        // No Gemini key configured at all
+        console.log("[SkyStory] No Gemini Key. Using Zhipu Direct.");
+        resultText = await Promise.race([
+            callZhipuAI(dataUrl, prompt),
+            timeoutPromise(45000, "Zhipu")
+        ]);
+        usedModel = "Zhipu";
+    } else {
+        throw new Error("No API Keys configured.");
     }
 
     if (!resultText) throw new Error("No response from AI Service");
 
     // 3. Parse Result
-    // Clean potential markdown code blocks if present (Common in LLM outputs)
     let cleanedText = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
     
-    // Sometimes models return text before the JSON
     const firstBrace = cleanedText.indexOf('{');
     const lastBrace = cleanedText.lastIndexOf('}');
     if (firstBrace !== -1 && lastBrace !== -1) {
@@ -264,22 +255,13 @@ export const analyzeSkyImage = async (
   } catch (error: any) {
     console.error("SkyStory Analysis Error:", error);
     
-    // If it's a configuration error, we might want to show it in the UI logic via alert
-    if (error.message.includes("ZHIPU_API_KEY")) {
-         // Re-throw critical config errors so the UI doesn't just show "Hazy sky"
-         // (The caller in App.tsx currently catches everything, but at least we see it in console)
-    }
-
-    // Return a backup object so the UI doesn't crash completely,
-    // but typically we want the user to know it failed.
-    // For now, standard behavior:
     return {
       category: SkyCategory.UNKNOWN,
       scientificName: 'Connection Error',
-      translatedName: '连接错误',
-      poeticExpression: 'The signal is lost in the clouds.',
-      proverb: error.message || 'Please check API Key.',
-      proverbTranslation: 'Check settings.',
+      translatedName: '连接失败',
+      poeticExpression: 'The clouds are unreachable.',
+      proverb: error.message || 'Check Network/VPN',
+      proverbTranslation: 'Please check settings.',
       dominantColors: ['#000000', '#333333', '#666666'], 
       timestamp: Date.now(),
       imageUrl: `data:image/jpeg;base64,${base64Image}`,

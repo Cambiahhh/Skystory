@@ -79,7 +79,7 @@ export enum FilterType {
 
 export interface JournalEntry extends Partial<SkyAnalysisResult> {
   id: string;
-  status: 'pending' | 'completed' | 'failed';
+  status: 'pending' | 'completed' | 'failed' | 'reprinting'; // Added 'reprinting'
   imageUrl: string; 
   filter?: FilterType; 
   type?: string;

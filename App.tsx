@@ -155,7 +155,24 @@ export const App: React.FC = () => {
   const handleReprint = async (newLang: TargetLanguage) => {
     if (!currentResult || !currentResult.imageUrl) return;
     
+    // UI Loading state for ResultCard
     setReprinting(true);
+    
+    const targetTimestamp = currentResult.timestamp;
+    
+    // 1. Mark Journal Entry as Reprinting immediately so background updates
+    setJournal(prev => {
+        const updated = prev.map(entry => {
+            if (entry.timestamp === targetTimestamp) {
+                return { ...entry, status: 'reprinting' } as JournalEntry;
+            }
+            return entry;
+        });
+        // We don't necessarily need to persist "reprinting" state to disk 
+        // as it is transient, but doing so is fine.
+        return updated;
+    });
+
     const base64Data = currentResult.imageUrl.split(',')[1];
 
     try {
@@ -189,6 +206,9 @@ export const App: React.FC = () => {
     } catch (error) {
         console.error("Reprint failed", error);
         alert(settings.appLanguage === 'CN' ? '显影失败，请检查网络连接' : 'Developing failed. Check connection.');
+        
+        // Revert status to completed if failed (remove reprinting state)
+        setJournal(prev => prev.map(e => e.timestamp === targetTimestamp ? { ...e, status: 'completed' } as JournalEntry : e));
     } finally {
         setReprinting(false);
     }

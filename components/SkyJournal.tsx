@@ -178,6 +178,8 @@ const JournalItem: React.FC<{
         setRotation(r => r + 180);
     };
 
+    const isProcessing = entry.status === 'pending' || entry.status === 'reprinting';
+
     return (
         <div 
             draggable={!isFalling} 
@@ -206,10 +208,12 @@ const JournalItem: React.FC<{
                     onClick={() => entry.status === 'completed' && onSelect(entry)}
                     className={`backface-hidden bg-white p-2 pb-4 shadow-xl rounded-[2px] relative overflow-visible ${entry.status === 'completed' ? 'cursor-pointer' : 'opacity-80'}`}
                 >
-                    {entry.status === 'pending' && (
+                    {isProcessing && (
                         <div className="absolute inset-0 z-20 bg-black/10 backdrop-blur-[1px] flex flex-col items-center justify-center gap-2 rounded-[2px]">
                             <Loader2 size={20} className="text-slate-800 animate-spin" />
-                            <span className="text-[9px] font-serif-display tracking-widest text-slate-800 uppercase bg-white/50 px-2 py-1 rounded-full">{t.developing}</span>
+                            <span className="text-[9px] font-serif-display tracking-widest text-slate-800 uppercase bg-white/50 px-2 py-1 rounded-full shadow-sm">
+                                {entry.status === 'reprinting' ? t.reprinting : t.developing}
+                            </span>
                         </div>
                     )}
                     
@@ -273,7 +277,11 @@ const JournalItem: React.FC<{
                                 </div>
                             </>
                         ) : (
-                            <div className="h-4 bg-slate-100 rounded animate-pulse w-2/3 mx-auto"></div>
+                            // Placeholder lines for loading states
+                            <div className="w-full flex flex-col items-center gap-2 opacity-50">
+                                <div className="h-3 bg-slate-200 rounded w-3/4"></div>
+                                <div className="h-2 bg-slate-100 rounded w-1/2"></div>
+                            </div>
                         )}
                     </div>
                 </div>
