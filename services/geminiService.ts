@@ -38,6 +38,8 @@ const callGeminiAI = async (
   base64Image: string,
   prompt: string
 ): Promise<string> => {
+  if (!geminiApiKey) throw new Error("Gemini API Key is missing");
+
   const response = await googleAI.models.generateContent({
     model: GEMINI_MODEL,
     contents: {
@@ -82,53 +84,57 @@ const callZhipuAI = async (
 ): Promise<string> => {
   if (!zhipuApiKey) throw new Error("ZHIPU_API_KEY is missing");
 
+  console.log("[SkyStory] Calling Zhipu AI...");
   const url = "https://open.bigmodel.cn/api/paas/v4/chat/completions";
-  
-  // Zhipu doesn't support "systemInstruction" field in the same way as Gemini SDK, 
-  // so we prepend system instruction to messages.
-  // Zhipu requires JSON mode enforcement via prompt or response_format if supported by model,
-  // but for V4 Flash, good prompting is key.
   
   const payload = {
     model: ZHIPU_MODEL,
     messages: [
       {
         role: "system",
-        content: SYSTEM_INSTRUCTION + "\n\nIMPORTANT: Return ONLY raw JSON without markdown formatting."
+        content: SYSTEM_INSTRUCTION + "\n\nIMPORTANT: Return ONLY raw JSON without markdown formatting. Do not wrap in ```json."
       },
       {
         role: "user",
         content: [
           { type: "text", text: prompt },
-          { type: "image_url", image_url: { url: base64Image } } // Zhipu accepts base64 data URLs here
+          { type: "image_url", image_url: { url: base64Image } } 
         ]
       }
     ],
-    temperature: 0.7,
-    top_p: 0.95,
+    temperature: 0.5, // Lower temperature for more stable JSON
+    top_p: 0.9,
     max_tokens: 1024,
     stream: false
   };
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${zhipuApiKey}`
-    },
-    body: JSON.stringify(payload)
-  });
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${zhipuApiKey}` // V4 supports direct API Key in Bearer
+      },
+      body: JSON.stringify(payload)
+    });
 
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Zhipu API Error: ${response.status} ${err}`);
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`[SkyStory] Zhipu API Error (${response.status}):`, errText);
+      throw new Error(`Zhipu API Error: ${response.status} ${errText}`);
+    }
+
+    const data = await response.json();
+    console.log("[SkyStory] Zhipu Response Received", data);
+
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) throw new Error("Empty response from Zhipu");
+    
+    return content;
+  } catch (error) {
+    console.error("[SkyStory] Zhipu Network/Parsing Error:", error);
+    throw error;
   }
-
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error("Empty response from Zhipu");
-  
-  return content;
 };
 
 
@@ -145,28 +151,39 @@ export const analyzeSkyImage = async (
       Analyze this image of the sky. 
       Identify if it contains clouds, sun events (sunrise/sunset), or moon phases.
       The target language is ${language}.
-      Return a JSON object matching the schema.
-      IMPORTANT: For 'dominantColors', extract 3 hex codes specifically representing the sky gradient, ordered from the TOP of the sky to the HORIZON (Bottom).
-      IMPORTANT: For 'category', you MUST select exactly one value from the provided list that best matches the image.
+      Return a valid JSON object matching the schema:
+      {
+        "category": "One of [Cumulus, Stratus, Cirrus, Nimbus, Contrail, Clear, Sunrise, Sunset, Golden Hour, Blue Hour, Crescent Moon, Quarter Moon, Gibbous Moon, Full Moon]",
+        "scientificName": "Scientific name string",
+        "translatedName": "Name in target language",
+        "poeticExpression": "Max 15 words poetic description in target language",
+        "proverb": "Weather proverb/myth in target language",
+        "proverbTranslation": "English translation of proverb",
+        "dominantColors": ["#hex1", "#hex2", "#hex3"] (Top to bottom gradient)
+      }
     `;
 
-    // 1. Detect Location
+    // 1. Detect Strategy
     const inChina = isLikelyChina();
-    console.log(`[SkyStory] Location detection: ${inChina ? 'China (Switching to Zhipu)' : 'Global (Using Gemini)'}`);
+    const hasGemini = !!geminiApiKey;
+    const hasZhipu = !!zhipuApiKey;
+
+    // Logic: Use Zhipu if in China OR if Gemini is missing but Zhipu exists.
+    const useZhipu = (inChina && hasZhipu) || (!hasGemini && hasZhipu);
+
+    console.log(`[SkyStory] Strategy: ${useZhipu ? 'Zhipu AI' : 'Gemini AI'} (China: ${inChina}, HasGemini: ${hasGemini})`);
 
     let resultText = "";
+    
+    // Zhipu requires full Data URL
+    const dataUrl = `data:image/jpeg;base64,${base64Image}`;
 
-    // 2. Route Request
-    if (inChina && zhipuApiKey) {
-      // Zhipu requires full data URL
-      const dataUrl = `data:image/jpeg;base64,${base64Image}`;
-      // Race Zhipu call
+    if (useZhipu) {
       resultText = await Promise.race([
         callZhipuAI(dataUrl, prompt),
-        timeoutPromise(45000)
+        timeoutPromise(60000) // 60s timeout for Zhipu
       ]);
     } else {
-      // Standard Gemini call
       resultText = await Promise.race([
         callGeminiAI(base64Image, prompt),
         timeoutPromise(45000)
@@ -177,21 +194,32 @@ export const analyzeSkyImage = async (
 
     // 3. Parse Result
     // Clean potential markdown code blocks if present (Common in LLM outputs)
-    const cleanedText = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
+    let cleanedText = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
+    
+    // Sometimes models return text before the JSON
+    const firstBrace = cleanedText.indexOf('{');
+    const lastBrace = cleanedText.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1) {
+        cleanedText = cleanedText.substring(firstBrace, lastBrace + 1);
+    }
 
     const data = JSON.parse(cleanedText) as Omit<SkyAnalysisResult, 'timestamp' | 'imageUrl' | 'language'>;
     
     // Ensure category is a valid enum, fallback to UNKNOWN if model hallucinates
     let category = data.category as SkyCategory;
-    if (!Object.values(SkyCategory).includes(category)) {
-      category = SkyCategory.UNKNOWN;
+    // Simple validation
+    const validCategories = Object.values(SkyCategory);
+    // Try to fuzzy match if exact match fails (e.g. model returns "Cumulus Clouds" instead of "Cumulus")
+    if (!validCategories.includes(category)) {
+        const fuzzyMatch = validCategories.find(c => category.includes(c));
+        category = fuzzyMatch || SkyCategory.UNKNOWN;
     }
 
     return {
       ...data,
       category,
       timestamp: Date.now(),
-      imageUrl: `data:image/jpeg;base64,${base64Image}`,
+      imageUrl: dataUrl,
       language: language
     };
 
@@ -200,12 +228,12 @@ export const analyzeSkyImage = async (
     // Return a backup object so the UI doesn't crash
     return {
       category: SkyCategory.UNKNOWN,
-      scientificName: 'Mystery of the Sky',
-      translatedName: 'Unknown Beauty',
-      poeticExpression: 'The sky whispers secrets we cannot yet understand.',
-      proverb: 'Even when the sky is silent, it is beautiful.',
-      proverbTranslation: 'Nature speaks in many tongues.',
-      dominantColors: ['#1e3a8a', '#60a5fa', '#fcd34d'], // Default gradient
+      scientificName: 'Analysis Failed',
+      translatedName: 'Connection Error',
+      poeticExpression: 'The clouds are thick today, obstructing our view.',
+      proverb: 'Please check your connection or API key.',
+      proverbTranslation: 'Network error.',
+      dominantColors: ['#333333', '#555555', '#777777'], 
       timestamp: Date.now(),
       imageUrl: `data:image/jpeg;base64,${base64Image}`,
       language: language
