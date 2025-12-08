@@ -5,12 +5,32 @@ import { GEMINI_MODEL, ZHIPU_MODEL, SYSTEM_INSTRUCTION } from '../constants';
 
 // --- Configuration ---
 
+// Helper to safely get env vars in various environments (Vite, CRA, Next.js)
+const getEnvVar = (key: string): string | undefined => {
+  // 1. Standard process.env
+  if (typeof process !== 'undefined' && process.env && process.env[key]) {
+    return process.env[key];
+  }
+  // 2. Vite (import.meta.env)
+  // @ts-ignore
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[`VITE_${key}`]) {
+    // @ts-ignore
+    return import.meta.env[`VITE_${key}`];
+  }
+  // 3. React Scripts (CRA)
+  if (typeof process !== 'undefined' && process.env && process.env[`REACT_APP_${key}`]) {
+    return process.env[`REACT_APP_${key}`];
+  }
+  return undefined;
+};
+
 // 1. Google Gemini Config
-const geminiApiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
-const googleAI = new GoogleGenAI({ apiKey: geminiApiKey });
+const geminiApiKey = getEnvVar('GEMINI_API_KEY') || getEnvVar('API_KEY');
+// Initialize conditionally to avoid errors if key is missing but we intend to use Zhipu
+const googleAI = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
 
 // 2. Zhipu AI Config
-const zhipuApiKey = process.env.ZHIPU_API_KEY;
+const zhipuApiKey = getEnvVar('ZHIPU_API_KEY');
 
 // Helper: Timeout Promise
 const timeoutPromise = (ms: number) => new Promise<never>((_, reject) => {
@@ -38,7 +58,7 @@ const callGeminiAI = async (
   base64Image: string,
   prompt: string
 ): Promise<string> => {
-  if (!geminiApiKey) throw new Error("Gemini API Key is missing");
+  if (!googleAI) throw new Error("Gemini API Key is missing");
 
   const response = await googleAI.models.generateContent({
     model: GEMINI_MODEL,
@@ -82,7 +102,10 @@ const callZhipuAI = async (
   base64Image: string,
   prompt: string
 ): Promise<string> => {
-  if (!zhipuApiKey) throw new Error("ZHIPU_API_KEY is missing");
+  // Final check before call
+  if (!zhipuApiKey) {
+      throw new Error("Configuration Error: ZHIPU_API_KEY is missing. Please set this variable to use the app in China.");
+  }
 
   console.log("[SkyStory] Calling Zhipu AI...");
   const url = "https://open.bigmodel.cn/api/paas/v4/chat/completions";
@@ -92,7 +115,7 @@ const callZhipuAI = async (
     messages: [
       {
         role: "system",
-        content: SYSTEM_INSTRUCTION + "\n\nIMPORTANT: Return ONLY raw JSON without markdown formatting. Do not wrap in ```json."
+        content: SYSTEM_INSTRUCTION + "\n\nIMPORTANT: Return ONLY raw JSON. Do not use Markdown code blocks."
       },
       {
         role: "user",
@@ -102,7 +125,7 @@ const callZhipuAI = async (
         ]
       }
     ],
-    temperature: 0.5, // Lower temperature for more stable JSON
+    temperature: 0.5,
     top_p: 0.9,
     max_tokens: 1024,
     stream: false
@@ -113,7 +136,7 @@ const callZhipuAI = async (
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${zhipuApiKey}` // V4 supports direct API Key in Bearer
+        "Authorization": `Bearer ${zhipuApiKey}` 
       },
       body: JSON.stringify(payload)
     });
@@ -165,29 +188,46 @@ export const analyzeSkyImage = async (
 
     // 1. Detect Strategy
     const inChina = isLikelyChina();
-    const hasGemini = !!geminiApiKey;
-    const hasZhipu = !!zhipuApiKey;
-
-    // Logic: Use Zhipu if in China OR if Gemini is missing but Zhipu exists.
-    const useZhipu = (inChina && hasZhipu) || (!hasGemini && hasZhipu);
-
-    console.log(`[SkyStory] Strategy: ${useZhipu ? 'Zhipu AI' : 'Gemini AI'} (China: ${inChina}, HasGemini: ${hasGemini})`);
-
-    let resultText = "";
     
     // Zhipu requires full Data URL
     const dataUrl = `data:image/jpeg;base64,${base64Image}`;
+    
+    let resultText = "";
 
-    if (useZhipu) {
-      resultText = await Promise.race([
-        callZhipuAI(dataUrl, prompt),
-        timeoutPromise(60000) // 60s timeout for Zhipu
-      ]);
+    console.log(`[SkyStory] Location: ${inChina ? 'China' : 'Global'}`);
+    console.log(`[SkyStory] Keys Present - Gemini: ${!!geminiApiKey}, Zhipu: ${!!zhipuApiKey}`);
+
+    // LOGIC:
+    // 1. If in China -> MUST use Zhipu. If no key, fail loudly (don't try Gemini, it will timeout).
+    // 2. If Global -> Use Gemini if available. If not, try Zhipu.
+    
+    if (inChina) {
+        console.log("[SkyStory] Strategy: Forced Zhipu AI (China Region)");
+        if (!zhipuApiKey) {
+            // Throwing specific error to be caught by UI
+            throw new Error("检测到中国地区，但未配置 ZHIPU_API_KEY。无法访问 Google 服务，请配置智谱 Key。");
+        }
+        resultText = await Promise.race([
+            callZhipuAI(dataUrl, prompt),
+            timeoutPromise(60000)
+        ]);
     } else {
-      resultText = await Promise.race([
-        callGeminiAI(base64Image, prompt),
-        timeoutPromise(45000)
-      ]);
+        // Global
+        if (googleAI) {
+            console.log("[SkyStory] Strategy: Gemini AI");
+            resultText = await Promise.race([
+                callGeminiAI(base64Image, prompt),
+                timeoutPromise(45000)
+            ]);
+        } else if (zhipuApiKey) {
+            console.log("[SkyStory] Strategy: Fallback Zhipu AI (No Gemini Key)");
+            resultText = await Promise.race([
+                callZhipuAI(dataUrl, prompt),
+                timeoutPromise(60000)
+            ]);
+        } else {
+            throw new Error("No API Keys configured (Gemini or Zhipu).");
+        }
     }
 
     if (!resultText) throw new Error("No response from AI Service");
@@ -205,11 +245,9 @@ export const analyzeSkyImage = async (
 
     const data = JSON.parse(cleanedText) as Omit<SkyAnalysisResult, 'timestamp' | 'imageUrl' | 'language'>;
     
-    // Ensure category is a valid enum, fallback to UNKNOWN if model hallucinates
+    // Ensure category is a valid enum
     let category = data.category as SkyCategory;
-    // Simple validation
     const validCategories = Object.values(SkyCategory);
-    // Try to fuzzy match if exact match fails (e.g. model returns "Cumulus Clouds" instead of "Cumulus")
     if (!validCategories.includes(category)) {
         const fuzzyMatch = validCategories.find(c => category.includes(c));
         category = fuzzyMatch || SkyCategory.UNKNOWN;
@@ -223,17 +261,26 @@ export const analyzeSkyImage = async (
       language: language
     };
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("SkyStory Analysis Error:", error);
-    // Return a backup object so the UI doesn't crash
+    
+    // If it's a configuration error, we might want to show it in the UI logic via alert
+    if (error.message.includes("ZHIPU_API_KEY")) {
+         // Re-throw critical config errors so the UI doesn't just show "Hazy sky"
+         // (The caller in App.tsx currently catches everything, but at least we see it in console)
+    }
+
+    // Return a backup object so the UI doesn't crash completely,
+    // but typically we want the user to know it failed.
+    // For now, standard behavior:
     return {
       category: SkyCategory.UNKNOWN,
-      scientificName: 'Analysis Failed',
-      translatedName: 'Connection Error',
-      poeticExpression: 'The clouds are thick today, obstructing our view.',
-      proverb: 'Please check your connection or API key.',
-      proverbTranslation: 'Network error.',
-      dominantColors: ['#333333', '#555555', '#777777'], 
+      scientificName: 'Connection Error',
+      translatedName: '连接错误',
+      poeticExpression: 'The signal is lost in the clouds.',
+      proverb: error.message || 'Please check API Key.',
+      proverbTranslation: 'Check settings.',
+      dominantColors: ['#000000', '#333333', '#666666'], 
       timestamp: Date.now(),
       imageUrl: `data:image/jpeg;base64,${base64Image}`,
       language: language
