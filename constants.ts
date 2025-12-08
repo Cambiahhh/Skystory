@@ -2,6 +2,7 @@
 import { TargetLanguage, AppLanguage, FilterType, AspectRatio, SkyCategory } from './types';
 
 export const GEMINI_MODEL = 'gemini-2.5-flash';
+export const ZHIPU_MODEL = 'glm-4v-flash'; // Using the standard fast vision model
 
 // Updated System Instruction to force selection from the Lexicon
 export const SYSTEM_INSTRUCTION = `
