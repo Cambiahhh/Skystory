@@ -33,6 +33,8 @@ export const App: React.FC = () => {
 
   // Network Error State
   const [showNetworkError, setShowNetworkError] = useState(false);
+  const [lastError, setLastError] = useState<string>(""); // Store the specific error message
+  
   // We store the context needed to retry the failed operation
   const [retryContext, setRetryContext] = useState<{
       type: 'capture' | 'reprint',
@@ -135,13 +137,14 @@ export const App: React.FC = () => {
           return updated;
         });
 
-      } catch (error) {
+      } catch (error: any) {
         console.error("Capture Analysis failed", error);
         
         // Remove the pending entry so it doesn't get stuck
         setJournal(prev => prev.filter(e => e.id !== entryId));
 
         // Trigger Error Modal
+        setLastError(error.message || "Unknown error");
         setRetryContext({ type: 'capture', base64: base64Data, id: entryId });
         setShowNetworkError(true);
       } 
@@ -168,13 +171,14 @@ export const App: React.FC = () => {
           return updated;
         });
 
-      } catch (error) {
+      } catch (error: any) {
           console.error("Reprint failed", error);
           
           // Reset status to completed
           setJournal(prev => prev.map(e => e.timestamp === targetTimestamp ? { ...e, status: 'completed' } as JournalEntry : e));
           
           // Trigger Error Modal
+          setLastError(error.message || "Unknown error");
           setRetryContext({ type: 'reprint', base64: base64Data, targetLang: targetLang });
           setShowNetworkError(true);
       } finally {
@@ -246,6 +250,7 @@ export const App: React.FC = () => {
       const newSettings = { ...settings, region: NetworkRegion.CN };
       updateSettings(newSettings);
       setShowNetworkError(false);
+      setLastError("");
       
       // Retry immediately with new settings
       if (retryContext) {
@@ -277,6 +282,7 @@ export const App: React.FC = () => {
 
   const handleNetworkRetry = () => {
       setShowNetworkError(false);
+      setLastError("");
       if (retryContext) {
           if (retryContext.type === 'capture' && retryContext.id) {
               const imageUrl = `data:image/jpeg;base64,${retryContext.base64}`;
@@ -304,6 +310,7 @@ export const App: React.FC = () => {
 
   const handleNetworkCancel = () => {
       setShowNetworkError(false);
+      setLastError("");
       setRetryContext(null);
   };
 
@@ -331,6 +338,7 @@ export const App: React.FC = () => {
           <NetworkErrorModal 
               lang={settings.appLanguage}
               isGlobalMode={settings.region === NetworkRegion.GLOBAL}
+              errorMessage={lastError}
               onSwitch={handleNetworkSwitch}
               onRetry={handleNetworkRetry}
               onClose={handleNetworkCancel}

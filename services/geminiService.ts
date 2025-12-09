@@ -1,5 +1,4 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
 import { SkyAnalysisResult, TargetLanguage, SkyMode, SkyCategory, NetworkRegion } from '../types';
 import { GEMINI_MODEL, ZHIPU_MODEL, SYSTEM_INSTRUCTION } from '../constants';
 
@@ -22,19 +21,15 @@ const getEnvVar = (key: string): string | undefined => {
 
 // 1. Google Gemini Config
 const geminiApiKey = getEnvVar('GEMINI_API_KEY') || getEnvVar('API_KEY');
-const geminiBaseUrl = getEnvVar('GEMINI_BASE_URL'); 
-
-const googleAI = geminiApiKey ? new GoogleGenAI({ 
-    apiKey: geminiApiKey, 
-    baseUrl: geminiBaseUrl 
-} as any) : null;
+// Optional: Allow custom proxy URL for Gemini (e.g. https://my-proxy.com/v1beta/models)
+const geminiBaseUrl = getEnvVar('GEMINI_BASE_URL') || "https://generativelanguage.googleapis.com/v1beta";
 
 // 2. Zhipu AI Config
 const zhipuApiKey = getEnvVar('ZHIPU_API_KEY');
 
 // Helper: Timeout Promise
 const timeoutPromise = (ms: number, name: string) => new Promise<never>((_, reject) => {
-  setTimeout(() => reject(new Error(`${name} Request timed out after ${ms}ms`)), ms);
+  setTimeout(() => reject(new Error(`${name} Request timed out after ${ms/1000}s`)), ms);
 });
 
 // Helper: Clean JSON
@@ -53,48 +48,71 @@ const extractJSON = (text: string): string => {
     return cleaned;
 };
 
-// --- API Implementation: Gemini ---
-
+// --- API Implementation: Gemini (REST API via Fetch) ---
+// Using fetch directly is often more reliable through VPNs/Proxies than the SDK
 const callGeminiAI = async (
   base64Image: string,
   prompt: string
 ): Promise<string> => {
-  if (!googleAI) throw new Error("Gemini API Key is missing");
+  if (!geminiApiKey) throw new Error("GEMINI_API_KEY not found in environment variables.");
 
-  const response = await googleAI.models.generateContent({
-    model: GEMINI_MODEL,
-    contents: {
+  console.log("[SkyStory] Calling Gemini via REST...");
+  
+  const url = `${geminiBaseUrl}/models/${GEMINI_MODEL}:generateContent?key=${geminiApiKey}`;
+
+  const payload = {
+    contents: [{
       parts: [
-        { inlineData: { mimeType: 'image/jpeg', data: base64Image } },
-        { text: prompt }
+        { text: prompt },
+        { inline_data: { mime_type: "image/jpeg", data: base64Image } }
       ]
+    }],
+    // We request plain text via JSON schema to ensure strictness, similar to SDK
+    generationConfig: {
+        response_mime_type: "application/json",
+        response_schema: {
+            type: "OBJECT",
+            properties: {
+                category: { type: "STRING", enum: Object.values(SkyCategory) },
+                scientificName: { type: "STRING" },
+                translatedName: { type: "STRING" },
+                poeticExpression: { type: "STRING" },
+                proverb: { type: "STRING" },
+                proverbTranslation: { type: "STRING" },
+                dominantColors: { type: "ARRAY", items: { type: "STRING" } }
+            },
+            required: ['category', 'scientificName', 'translatedName', 'poeticExpression', 'proverb', 'dominantColors']
+        }
     },
-    config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          category: { 
-            type: Type.STRING, 
-            enum: Object.values(SkyCategory)
-          },
-          scientificName: { type: Type.STRING },
-          translatedName: { type: Type.STRING },
-          poeticExpression: { type: Type.STRING },
-          proverb: { type: Type.STRING },
-          proverbTranslation: { type: Type.STRING },
-          dominantColors: { 
-            type: Type.ARRAY, 
-            items: { type: Type.STRING }
-          }
-        },
-        required: ['category', 'scientificName', 'translatedName', 'poeticExpression', 'proverb', 'dominantColors']
-      }
+    system_instruction: {
+        parts: [{ text: SYSTEM_INSTRUCTION }]
     }
-  });
+  };
 
-  return response.text || "";
+  try {
+      const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`Gemini API Error (${response.status}): ${errText}`);
+      }
+
+      const data = await response.json();
+      const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      
+      if (!content) throw new Error("Gemini returned empty response.");
+      return content;
+
+  } catch (error: any) {
+      console.error("[SkyStory] Gemini Network Error:", error);
+      throw error;
+  }
 };
 
 // --- API Implementation: Zhipu (GLM-4V) ---
@@ -103,7 +121,7 @@ const callZhipuAI = async (
   base64Image: string,
   prompt: string
 ): Promise<string> => {
-  if (!zhipuApiKey) throw new Error("ZHIPU_API_KEY is missing");
+  if (!zhipuApiKey) throw new Error("ZHIPU_API_KEY not found in environment variables.");
 
   console.log("[SkyStory] Calling Zhipu AI...");
   const url = "https://open.bigmodel.cn/api/paas/v4/chat/completions";
@@ -186,7 +204,7 @@ export const analyzeSkyImage = async (
         "poeticExpression": "A romantic, emotional, short poem about this sky (in ${language}, max 15 words)",
         "proverb": "A weather proverb or myth (in ${language})",
         "proverbTranslation": "English translation of the proverb",
-        "dominantColors": ["#hex1", "#hex2", "#hex3"]
+        "dominantColors: ["#hex1", "#hex2", "#hex3"]
       }
     `;
 
