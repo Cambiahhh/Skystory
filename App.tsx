@@ -7,6 +7,7 @@ import SkyJournal from './components/SkyJournal';
 import SettingsView from './components/SettingsView';
 import TutorialOverlay from './components/TutorialOverlay';
 import WelcomeScreen from './components/WelcomeScreen';
+import NetworkErrorModal from './components/NetworkErrorModal'; // New Import
 import { analyzeSkyImage } from './services/geminiService';
 import { AppView, SkyAnalysisResult, TargetLanguage, JournalEntry, SkyMode, AppSettings, FilterType, AppLanguage, NetworkRegion } from './types';
 import { DEFAULT_SETTINGS, UI_TEXT } from './constants';
@@ -29,6 +30,10 @@ export const App: React.FC = () => {
   // Onboarding State
   const [showWelcome, setShowWelcome] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
+
+  // Network Error State
+  const [showNetworkError, setShowNetworkError] = useState(false);
+  const [failedImageContext, setFailedImageContext] = useState<{base64: string, id: string} | null>(null);
 
   // Init
   useEffect(() => {
@@ -63,8 +68,6 @@ export const App: React.FC = () => {
     }
 
     // 3. Tutorial Logic
-    // If settings exist but onboarded flag missing (e.g. old user), show tutorial only?
-    // Actually, stick to the welcome logic: if no settings, welcome. If settings but no tutorial, tutorial.
     if (savedSettings && !hasOnboarded) {
         setShowTutorial(true);
     }
@@ -115,13 +118,39 @@ export const App: React.FC = () => {
       updateSettings({ ...settings, region: newRegion });
   };
 
+  // Re-usable Analysis Function to support Retry
+  const runAnalysis = async (base64Data: string, entryId: string, currentSettings: AppSettings) => {
+      try {
+        const result = await analyzeSkyImage(base64Data, currentSettings.cardLanguage, mode, currentSettings.region);
+        
+        // Success: Update Entry
+        setJournal(prev => {
+          const updated = prev.map(entry => {
+              if (entry.id === entryId) {
+                  return { ...entry, ...result, status: 'completed' } as JournalEntry;
+              }
+              return entry;
+          });
+          localStorage.setItem('skystory_journal', JSON.stringify(updated));
+          return updated;
+        });
+
+      } catch (error) {
+        console.error("Analysis failed", error);
+        
+        // Remove pending entry on failure logic OR keep it as 'failed' status (user preference often calls for cleanup or retry)
+        // Here we'll clean up for now, but save context for retry modal
+        setJournal(prev => prev.filter(e => e.id !== entryId));
+
+        setFailedImageContext({ base64: base64Data, id: entryId });
+        setShowNetworkError(true);
+      } 
+  };
+
   // Analysis Logic (Async)
   const handleImageSelected = async (file: File) => {
     setFlash(true);
     setTimeout(() => setFlash(false), 300);
-    
-    // NOTE: We stay on the Camera View now. 
-    // Navigation happens only if the user clicks the notification.
     
     const entryId = Date.now().toString();
     
@@ -151,88 +180,84 @@ export const App: React.FC = () => {
 
       // 2. Show "Captured" Notification once
       setShowNotification(true);
-      setTimeout(() => setShowNotification(false), 5000); // Auto hide after 5s
+      setTimeout(() => setShowNotification(false), 5000); 
 
-      // 3. Process in background
-      try {
-        const result = await analyzeSkyImage(base64Data, settings.cardLanguage, mode, settings.region);
-        
-        // 4. Update Entry to Completed
-        setJournal(prev => {
-          const updated = prev.map(entry => {
-              if (entry.id === entryId) {
-                  return { ...entry, ...result, status: 'completed' } as JournalEntry;
-              }
-              return entry;
-          });
-          localStorage.setItem('skystory_journal', JSON.stringify(updated));
-          return updated;
-        });
-
-      } catch (error) {
-        console.error(error);
-        
-        // Handle Failure: Remove pending entry
-        setJournal(prev => prev.filter(e => e.id !== entryId));
-        
-        // Specific Logic: Suggest Switching Regions if GLOBAL (Gemini) fails
-        if (settings.region === NetworkRegion.GLOBAL) {
-             // Basic confirm for now, can be a nice modal later
-             const shouldSwitch = window.confirm(UI_TEXT[settings.appLanguage].errorSwitchPrompt);
-             if (shouldSwitch) {
-                 updateSettings({ ...settings, region: NetworkRegion.CN });
-                 alert("Switched to Domestic Mode (China). Please try again.");
-                 return;
-             }
-        }
-
-        alert(UI_TEXT[settings.appLanguage].hazyError);
-      } 
+      // 3. Run Analysis
+      await runAnalysis(base64Data, entryId, settings);
     };
+  };
+
+  // Error Modal Handlers
+  const handleNetworkSwitch = () => {
+      // 1. Switch Settings
+      const newSettings = { ...settings, region: NetworkRegion.CN };
+      updateSettings(newSettings);
+      setShowNetworkError(false);
+      
+      // 2. Retry immediately if context exists
+      if (failedImageContext) {
+          // Re-create the pending entry first
+          const imageUrl = `data:image/jpeg;base64,${failedImageContext.base64}`;
+          const pendingEntry: JournalEntry = {
+            id: failedImageContext.id,
+            status: 'pending',
+            imageUrl: imageUrl,
+            timestamp: Date.now(),
+            type: 'unknown',
+            filter: FilterType.NATURAL
+          };
+          setJournal(prev => [pendingEntry, ...prev]);
+          
+          runAnalysis(failedImageContext.base64, failedImageContext.id, newSettings);
+      }
+  };
+
+  const handleNetworkRetry = () => {
+      setShowNetworkError(false);
+      if (failedImageContext) {
+          // Re-create pending
+          const imageUrl = `data:image/jpeg;base64,${failedImageContext.base64}`;
+          const pendingEntry: JournalEntry = {
+            id: failedImageContext.id,
+            status: 'pending',
+            imageUrl: imageUrl,
+            timestamp: Date.now(),
+            type: 'unknown',
+            filter: FilterType.NATURAL
+          };
+          setJournal(prev => [pendingEntry, ...prev]);
+
+          runAnalysis(failedImageContext.base64, failedImageContext.id, settings);
+      }
+  };
+
+  const handleNetworkCancel = () => {
+      setShowNetworkError(false);
+      setFailedImageContext(null);
   };
 
   // Reprint Logic
   const handleReprint = async (newLang: TargetLanguage) => {
     if (!currentResult || !currentResult.imageUrl) return;
-    
-    // UI Loading state for ResultCard
     setReprinting(true);
-    
     const targetTimestamp = currentResult.timestamp;
     
-    // 1. Mark Journal Entry as Reprinting immediately so background updates
-    setJournal(prev => {
-        const updated = prev.map(entry => {
-            if (entry.timestamp === targetTimestamp) {
-                return { ...entry, status: 'reprinting' } as JournalEntry;
-            }
-            return entry;
-        });
-        return updated;
-    });
+    // Mark Journal Entry as Reprinting
+    setJournal(prev => prev.map(entry => 
+        entry.timestamp === targetTimestamp ? { ...entry, status: 'reprinting' } as JournalEntry : entry
+    ));
 
     const base64Data = currentResult.imageUrl.split(',')[1];
 
     try {
-        // Force a small delay so user sees the loading state even if API is instant
         await new Promise(r => setTimeout(r, 600));
-
-        // Use the current settings.region
         const newResult = await analyzeSkyImage(base64Data, newLang, mode, settings.region);
         
-        const updatedResult = {
-            ...newResult,
-            timestamp: currentResult.timestamp,
-            imageUrl: currentResult.imageUrl
-        };
+        const updatedResult = { ...newResult, timestamp: currentResult.timestamp, imageUrl: currentResult.imageUrl };
         
-        // Update Current View
         setCurrentResult(updatedResult);
-        
-        // Update Journal Entry (Update the existing entry instead of creating new)
         setJournal(prev => {
           const updated = prev.map(entry => {
-             // Basic matching by timestamp/image match since we don't have ID in result context easily
              if (entry.imageUrl === currentResult.imageUrl && entry.timestamp === currentResult.timestamp) {
                  return { ...entry, ...updatedResult, status: 'completed' } as JournalEntry;
              }
@@ -244,18 +269,15 @@ export const App: React.FC = () => {
 
     } catch (error) {
         console.error("Reprint failed", error);
-        
-        // Specific Logic: Suggest Switching Regions if GLOBAL fails
+        // Show Network Error Modal for reprint failures too, but we need to handle context slightly differently
+        // For simplicity in this prompt update, we alert, or we could wire up the modal. 
+        // Given user request was mainly about initial capture flow:
         if (settings.region === NetworkRegion.GLOBAL) {
-             const shouldSwitch = window.confirm(UI_TEXT[settings.appLanguage].errorSwitchPrompt);
-             if (shouldSwitch) {
-                 updateSettings({ ...settings, region: NetworkRegion.CN });
-             }
+             // We can reuse the modal logic here if we wanted, but let's keep it simple for reprint to avoid state complexity hell
+             alert(UI_TEXT[settings.appLanguage].hazyError); 
         } else {
              alert(settings.appLanguage === 'CN' ? '显影失败，请检查网络连接' : 'Developing failed. Check connection.');
         }
-
-        // Revert status to completed if failed (remove reprinting state)
         setJournal(prev => prev.map(e => e.timestamp === targetTimestamp ? { ...e, status: 'completed' } as JournalEntry : e));
     } finally {
         setReprinting(false);
@@ -264,7 +286,6 @@ export const App: React.FC = () => {
 
   // Delete Logic
   const handleDeleteEntry = (id: string) => {
-    // Confirmation handled in SkyJournal component now
     setJournal(prev => {
       const updated = prev.filter(entry => entry.id !== id);
       localStorage.setItem('skystory_journal', JSON.stringify(updated));
@@ -283,6 +304,17 @@ export const App: React.FC = () => {
       
       {/* Flash Layer */}
       <div className={`absolute inset-0 z-[60] bg-white pointer-events-none transition-opacity duration-300 ${flash ? 'opacity-100' : 'opacity-0'}`}></div>
+
+      {/* Network Error Modal */}
+      {showNetworkError && (
+          <NetworkErrorModal 
+              lang={settings.appLanguage}
+              isGlobalMode={settings.region === NetworkRegion.GLOBAL}
+              onSwitch={handleNetworkSwitch}
+              onRetry={handleNetworkRetry}
+              onClose={handleNetworkCancel}
+          />
+      )}
 
       {/* Welcome Screen (First Launch) */}
       {showWelcome && (

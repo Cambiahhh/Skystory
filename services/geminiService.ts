@@ -179,17 +179,17 @@ export const analyzeSkyImage = async (
     // Explicit Routing based on Region
     if (region === NetworkRegion.GLOBAL) {
          console.log("[SkyStory] Mode: GLOBAL (Gemini)");
-         // 10s timeout for Gemini
+         // INCREASED TIMEOUT to 30s
          resultText = await Promise.race([
             callGeminiAI(base64Image, prompt),
-            timeoutPromise(10000, "Gemini (Global)") 
+            timeoutPromise(30000, "Gemini (Global)") 
         ]);
     } else {
         console.log("[SkyStory] Mode: CN (Zhipu)");
-        // 45s timeout for Zhipu (Vision can be slow)
+        // INCREASED TIMEOUT to 60s
         resultText = await Promise.race([
             callZhipuAI(dataUrl, prompt),
-            timeoutPromise(45000, "Zhipu (Domestic)")
+            timeoutPromise(60000, "Zhipu (Domestic)")
         ]);
     }
 
@@ -224,8 +224,6 @@ export const analyzeSkyImage = async (
 
   } catch (error: any) {
     console.error("SkyStory Analysis Error:", error);
-    
-    // Rethrow to let the UI handle the specific "Switch Region" logic if needed
     throw error;
   }
 };
