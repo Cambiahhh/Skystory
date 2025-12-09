@@ -1,7 +1,7 @@
 
 import React from 'react';
-import { X, Globe, Smartphone, Ratio } from 'lucide-react';
-import { AppSettings, TargetLanguage, AppLanguage, AspectRatio } from '../types';
+import { X, Globe, Smartphone, Ratio, Wifi } from 'lucide-react';
+import { AppSettings, TargetLanguage, AppLanguage, AspectRatio, NetworkRegion } from '../types';
 import { LANGUAGES, UI_LANGUAGES, UI_TEXT } from '../constants';
 
 interface SettingsViewProps {
@@ -26,6 +26,10 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSettings,
     onUpdateSettings({ ...settings, aspectRatio: ratio });
   };
 
+  const handleRegionChange = (region: NetworkRegion) => {
+      onUpdateSettings({ ...settings, region });
+  };
+
   const aspectRatios: AspectRatio[] = ['1:1', '2:3', '3:4', '4:3', '3:2'];
 
   return (
@@ -42,6 +46,42 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSettings,
         <h2 className="text-2xl font-serif-display text-white tracking-widest uppercase mb-8 text-center">
             {t.settings}
         </h2>
+
+        {/* Network / Region Section */}
+        <div className="mb-8">
+            <div className="flex items-center gap-2 mb-4 text-white/70">
+                <Wifi size={16} />
+                <span className="text-xs uppercase tracking-widest font-serif-text">{t.networkRegion}</span>
+            </div>
+            
+            <div className="flex gap-2 p-1 bg-white/5 rounded-lg border border-white/10">
+                <button
+                    onClick={() => handleRegionChange(NetworkRegion.GLOBAL)}
+                    className={`flex-1 px-4 py-3 rounded-md text-[10px] font-bold tracking-wider uppercase transition-all flex flex-col items-center gap-1 ${
+                        settings.region === NetworkRegion.GLOBAL 
+                        ? 'bg-blue-500/20 text-blue-100 shadow-sm border border-blue-500/30' 
+                        : 'text-white/30 hover:text-white/60'
+                    }`}
+                >
+                    <span>Global</span>
+                    <span className="scale-75 opacity-70">(Gemini)</span>
+                </button>
+                <button
+                    onClick={() => handleRegionChange(NetworkRegion.CN)}
+                    className={`flex-1 px-4 py-3 rounded-md text-[10px] font-bold tracking-wider uppercase transition-all flex flex-col items-center gap-1 ${
+                        settings.region === NetworkRegion.CN 
+                        ? 'bg-red-500/20 text-red-100 shadow-sm border border-red-500/30' 
+                        : 'text-white/30 hover:text-white/60'
+                    }`}
+                >
+                    <span>China</span>
+                    <span className="scale-75 opacity-70">(Zhipu)</span>
+                </button>
+            </div>
+            <p className="mt-2 text-[9px] text-white/30 text-center font-serif-text">
+                {settings.region === NetworkRegion.GLOBAL ? t.regionGlobal : t.regionCN}
+            </p>
+        </div>
 
         {/* App Language Section - Toggle Style */}
         <div className="mb-8">
@@ -127,7 +167,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSettings,
         {/* Footer */}
         <div className="mt-8 pt-6 border-t border-white/10 text-center">
              <p className="text-[10px] text-white/30 font-mono">
-                 SkyStory v1.3.0 &middot; Built with Gemini
+                 SkyStory v1.3.1 &middot; {settings.region === NetworkRegion.GLOBAL ? 'Gemini' : 'Zhipu'}
              </p>
         </div>
 

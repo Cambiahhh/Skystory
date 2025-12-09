@@ -1,5 +1,5 @@
 
-import { TargetLanguage, AppLanguage, FilterType, AspectRatio, SkyCategory } from './types';
+import { TargetLanguage, AppLanguage, FilterType, AspectRatio, SkyCategory, NetworkRegion } from './types';
 
 export const GEMINI_MODEL = 'gemini-2.5-flash';
 export const ZHIPU_MODEL = 'glm-4.6v-flash'; // Standard Flash Vision Model
@@ -91,11 +91,14 @@ export const UI_TEXT = {
   [AppLanguage.EN]: {
     subtitle: "Turn the sky into poetry",
     cloudStory: "Cloud Story",
-    starStory: "Star Story", // Kept in text but hidden in UI
+    starStory: "Star Story", 
     journal: "Journal",
     settings: "Settings",
     appLang: "App Language",
     cardLang: "Card Language",
+    networkRegion: "Network / Region",
+    regionGlobal: "Global (VPN Required)",
+    regionCN: "China Mainland",
     aspectRatio: "Photo Ratio",
     aspectRatioOpts: {
       '1:1': "1:1",
@@ -147,7 +150,15 @@ export const UI_TEXT = {
         done: "Start Exploring"
     },
     filterByColor: "Palette",
-    filterByType: "Collection"
+    filterByType: "Collection",
+    welcome: {
+      title: "Welcome",
+      selectLang: "Select Language",
+      selectRegion: "Select Network",
+      regionHint: "Please choose based on your current location.",
+      start: "Start Journey"
+    },
+    errorSwitchPrompt: "No response from AI (Global). Switch to Domestic Mode (China)?"
   },
   [AppLanguage.CN]: {
     subtitle: "把天空变成最浪漫的诗",
@@ -157,6 +168,9 @@ export const UI_TEXT = {
     settings: "设置",
     appLang: "应用语言",
     cardLang: "卡片语言",
+    networkRegion: "网络环境",
+    regionGlobal: "海外 (需 VPN)",
+    regionCN: "中国大陆",
     aspectRatio: "图片比例",
     aspectRatioOpts: {
       '1:1': "1:1 方形",
@@ -208,7 +222,15 @@ export const UI_TEXT = {
         done: "开始探索"
     },
     filterByColor: "色卡",
-    filterByType: "标本集"
+    filterByType: "标本集",
+    welcome: {
+      title: "欢迎",
+      selectLang: "选择语言",
+      selectRegion: "选择网络环境",
+      regionHint: "请根据您当前的网络环境选择",
+      start: "开启旅程"
+    },
+    errorSwitchPrompt: "海外线路无响应。是否切换回国内模式 (Zhipu AI)?"
   }
 };
 
@@ -216,5 +238,6 @@ export const DEFAULT_SETTINGS = {
   appLanguage: AppLanguage.CN,
   cardLanguage: TargetLanguage.CN_SIMPLE,
   saveToDevice: true,
-  aspectRatio: '1:1' as AspectRatio
+  aspectRatio: '1:1' as AspectRatio,
+  region: NetworkRegion.CN // Default safe fallback, but will be overridden by onboarding
 };

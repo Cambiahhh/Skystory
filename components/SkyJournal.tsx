@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { JournalEntry, AppLanguage, SkyCategory } from '../types';
-import { X, Aperture, AlertCircle, Loader2, Trash2, AlertTriangle, Palette, Image as ImageIcon, Filter, Tag } from 'lucide-react';
+import { JournalEntry, AppLanguage, SkyCategory, NetworkRegion } from '../types';
+import { X, Aperture, AlertCircle, Loader2, Trash2, AlertTriangle, Palette, Image as ImageIcon, Filter, Tag, Globe, Signal } from 'lucide-react';
 import { UI_TEXT, CATEGORY_LABELS } from '../constants';
 
 interface SkyJournalProps {
@@ -11,6 +11,8 @@ interface SkyJournalProps {
   onDeleteEntry: (id: string) => void;
   onReorderEntries: (newEntries: JournalEntry[]) => void;
   appLang: AppLanguage;
+  currentRegion: NetworkRegion;
+  onToggleRegion: () => void;
 }
 
 // --- Color Helper Logic ---
@@ -319,7 +321,7 @@ const JournalItem: React.FC<{
     );
 };
 
-const SkyJournal: React.FC<SkyJournalProps> = ({ entries, onClose, onSelectEntry, onDeleteEntry, onReorderEntries, appLang }) => {
+const SkyJournal: React.FC<SkyJournalProps> = ({ entries, onClose, onSelectEntry, onDeleteEntry, onReorderEntries, appLang, currentRegion, onToggleRegion }) => {
   const t = UI_TEXT[appLang];
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [fallingIds, setFallingIds] = useState<Set<string>>(new Set());
@@ -400,8 +402,20 @@ const SkyJournal: React.FC<SkyJournalProps> = ({ entries, onClose, onSelectEntry
           <div className="px-6 py-6 flex items-center justify-between">
             <h2 className="text-xl font-serif-display text-white tracking-widest uppercase">{t.journalTitle}</h2>
             
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
                 
+                {/* Network Region Toggle (Quick Switch) */}
+                <button
+                    onClick={onToggleRegion}
+                    className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all ${
+                        currentRegion === NetworkRegion.GLOBAL 
+                        ? 'border-blue-500/50 text-blue-400 bg-blue-500/10' 
+                        : 'border-red-500/50 text-red-400 bg-red-500/10'
+                    }`}
+                >
+                    {currentRegion === NetworkRegion.GLOBAL ? <Globe size={14} /> : <Signal size={14} />}
+                </button>
+
                 {/* Filter Toggle */}
                 <button 
                     onClick={() => setShowFilterDrawer(!showFilterDrawer)}

@@ -6,8 +6,9 @@ import ResultCard from './components/ResultCard';
 import SkyJournal from './components/SkyJournal';
 import SettingsView from './components/SettingsView';
 import TutorialOverlay from './components/TutorialOverlay';
+import WelcomeScreen from './components/WelcomeScreen';
 import { analyzeSkyImage } from './services/geminiService';
-import { AppView, SkyAnalysisResult, TargetLanguage, JournalEntry, SkyMode, AppSettings, FilterType } from './types';
+import { AppView, SkyAnalysisResult, TargetLanguage, JournalEntry, SkyMode, AppSettings, FilterType, AppLanguage, NetworkRegion } from './types';
 import { DEFAULT_SETTINGS, UI_TEXT } from './constants';
 import { Bell } from 'lucide-react';
 
@@ -25,43 +26,64 @@ export const App: React.FC = () => {
   const [currentResult, setCurrentResult] = useState<SkyAnalysisResult | null>(null);
   const [journal, setJournal] = useState<JournalEntry[]>([]);
 
-  // Tutorial State
+  // Onboarding State
+  const [showWelcome, setShowWelcome] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
 
   // Init
   useEffect(() => {
-    // Check Tutorial Status
-    const hasSeenTutorial = localStorage.getItem('skystory_tutorial_seen');
-    if (!hasSeenTutorial) {
-        setShowTutorial(true);
-    }
-
-    // Load journal
+    // 1. Load Journal
     const savedJournal = localStorage.getItem('skystory_journal');
     if (savedJournal) {
       try {
         setJournal(JSON.parse(savedJournal));
       } catch (e) { console.error("Failed to load journal", e); }
     }
-    // Load settings with migration
+
+    // 2. Load Settings with Migration
     const savedSettings = localStorage.getItem('skystory_settings');
+    const hasOnboarded = localStorage.getItem('skystory_onboarded');
+
     if (savedSettings) {
       try {
         const parsed = JSON.parse(savedSettings);
         // Migration: Map defaultFilmStock to cardLanguage if it exists and cardLanguage doesn't
+        // Migration: Ensure region exists
         const merged: AppSettings = {
             ...DEFAULT_SETTINGS,
             ...parsed,
-            cardLanguage: parsed.cardLanguage || parsed.defaultFilmStock || DEFAULT_SETTINGS.cardLanguage
+            cardLanguage: parsed.cardLanguage || parsed.defaultFilmStock || DEFAULT_SETTINGS.cardLanguage,
+            region: parsed.region || DEFAULT_SETTINGS.region
         };
         setSettings(merged);
       } catch (e) { console.error("Failed to load settings", e); }
+    } else {
+        // First time load, or settings cleared -> Show Welcome
+        setShowWelcome(true);
+    }
+
+    // 3. Tutorial Logic
+    // If settings exist but onboarded flag missing (e.g. old user), show tutorial only?
+    // Actually, stick to the welcome logic: if no settings, welcome. If settings but no tutorial, tutorial.
+    if (savedSettings && !hasOnboarded) {
+        setShowTutorial(true);
     }
   }, []);
 
+  const handleWelcomeComplete = (lang: AppLanguage, region: NetworkRegion) => {
+      // Save initial choices
+      const newSettings = { ...settings, appLanguage: lang, region: region };
+      setSettings(newSettings);
+      localStorage.setItem('skystory_settings', JSON.stringify(newSettings));
+      
+      setShowWelcome(false);
+      setShowTutorial(true);
+  };
+
   const handleTutorialClose = () => {
       setShowTutorial(false);
-      localStorage.setItem('skystory_tutorial_seen', 'true');
+      localStorage.setItem('skystory_onboarded', 'true');
+      localStorage.setItem('skystory_tutorial_seen', 'true'); // legacy support
   };
 
   const handleOpenTutorial = () => {
@@ -86,6 +108,11 @@ export const App: React.FC = () => {
 
   const handleBackToJournal = () => {
     setCurrentView(AppView.JOURNAL);
+  };
+
+  const handleToggleRegion = () => {
+      const newRegion = settings.region === NetworkRegion.GLOBAL ? NetworkRegion.CN : NetworkRegion.GLOBAL;
+      updateSettings({ ...settings, region: newRegion });
   };
 
   // Analysis Logic (Async)
@@ -128,7 +155,7 @@ export const App: React.FC = () => {
 
       // 3. Process in background
       try {
-        const result = await analyzeSkyImage(base64Data, settings.cardLanguage, mode);
+        const result = await analyzeSkyImage(base64Data, settings.cardLanguage, mode, settings.region);
         
         // 4. Update Entry to Completed
         setJournal(prev => {
@@ -144,8 +171,21 @@ export const App: React.FC = () => {
 
       } catch (error) {
         console.error(error);
-        // Remove failed entry
+        
+        // Handle Failure: Remove pending entry
         setJournal(prev => prev.filter(e => e.id !== entryId));
+        
+        // Specific Logic: Suggest Switching Regions if GLOBAL (Gemini) fails
+        if (settings.region === NetworkRegion.GLOBAL) {
+             // Basic confirm for now, can be a nice modal later
+             const shouldSwitch = window.confirm(UI_TEXT[settings.appLanguage].errorSwitchPrompt);
+             if (shouldSwitch) {
+                 updateSettings({ ...settings, region: NetworkRegion.CN });
+                 alert("Switched to Domestic Mode (China). Please try again.");
+                 return;
+             }
+        }
+
         alert(UI_TEXT[settings.appLanguage].hazyError);
       } 
     };
@@ -168,8 +208,6 @@ export const App: React.FC = () => {
             }
             return entry;
         });
-        // We don't necessarily need to persist "reprinting" state to disk 
-        // as it is transient, but doing so is fine.
         return updated;
     });
 
@@ -179,7 +217,8 @@ export const App: React.FC = () => {
         // Force a small delay so user sees the loading state even if API is instant
         await new Promise(r => setTimeout(r, 600));
 
-        const newResult = await analyzeSkyImage(base64Data, newLang, mode);
+        // Use the current settings.region
+        const newResult = await analyzeSkyImage(base64Data, newLang, mode, settings.region);
         
         const updatedResult = {
             ...newResult,
@@ -205,8 +244,17 @@ export const App: React.FC = () => {
 
     } catch (error) {
         console.error("Reprint failed", error);
-        alert(settings.appLanguage === 'CN' ? '显影失败，请检查网络连接' : 'Developing failed. Check connection.');
         
+        // Specific Logic: Suggest Switching Regions if GLOBAL fails
+        if (settings.region === NetworkRegion.GLOBAL) {
+             const shouldSwitch = window.confirm(UI_TEXT[settings.appLanguage].errorSwitchPrompt);
+             if (shouldSwitch) {
+                 updateSettings({ ...settings, region: NetworkRegion.CN });
+             }
+        } else {
+             alert(settings.appLanguage === 'CN' ? '显影失败，请检查网络连接' : 'Developing failed. Check connection.');
+        }
+
         // Revert status to completed if failed (remove reprinting state)
         setJournal(prev => prev.map(e => e.timestamp === targetTimestamp ? { ...e, status: 'completed' } as JournalEntry : e));
     } finally {
@@ -236,8 +284,13 @@ export const App: React.FC = () => {
       {/* Flash Layer */}
       <div className={`absolute inset-0 z-[60] bg-white pointer-events-none transition-opacity duration-300 ${flash ? 'opacity-100' : 'opacity-0'}`}></div>
 
+      {/* Welcome Screen (First Launch) */}
+      {showWelcome && (
+          <WelcomeScreen onComplete={handleWelcomeComplete} />
+      )}
+
       {/* Tutorial Overlay */}
-      {showTutorial && (
+      {showTutorial && !showWelcome && (
           <TutorialOverlay onClose={handleTutorialClose} lang={settings.appLanguage} />
       )}
 
@@ -287,6 +340,8 @@ export const App: React.FC = () => {
           onDeleteEntry={handleDeleteEntry}
           onReorderEntries={handleReorderEntries}
           appLang={settings.appLanguage}
+          currentRegion={settings.region}
+          onToggleRegion={handleToggleRegion}
         />
       )}
 

@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { SkyAnalysisResult, TargetLanguage, SkyMode, SkyCategory } from '../types';
+import { SkyAnalysisResult, TargetLanguage, SkyMode, SkyCategory, NetworkRegion } from '../types';
 import { GEMINI_MODEL, ZHIPU_MODEL, SYSTEM_INSTRUCTION } from '../constants';
 
 // --- Configuration ---
@@ -26,7 +26,7 @@ const getEnvVar = (key: string): string | undefined => {
 
 // 1. Google Gemini Config
 const geminiApiKey = getEnvVar('GEMINI_API_KEY') || getEnvVar('API_KEY');
-// Allow custom Base URL if user uses a proxy service specifically, but standard VPN uses default URL
+// Allow custom Base URL if user uses a proxy service specifically
 const geminiBaseUrl = getEnvVar('GEMINI_BASE_URL'); 
 
 const googleAI = geminiApiKey ? new GoogleGenAI({ 
@@ -152,7 +152,8 @@ const callZhipuAI = async (
 export const analyzeSkyImage = async (
   base64Image: string,
   language: TargetLanguage,
-  mode: SkyMode
+  mode: SkyMode,
+  region: NetworkRegion // NEW: Explicit region passed from App settings
 ): Promise<SkyAnalysisResult> => {
   
   try {
@@ -174,53 +175,22 @@ export const analyzeSkyImage = async (
 
     const dataUrl = `data:image/jpeg;base64,${base64Image}`;
     let resultText = "";
-    let usedModel = "None";
-
-    // --- NEW STRATEGY: VPN DETECTION (Try Fail) ---
-    // 1. Try Gemini first (Best Quality).
-    // 2. If it works, great.
-    // 3. If it times out or fails (likely no VPN), switch to Zhipu.
     
-    const canUseGemini = !!googleAI;
-    const canUseZhipu = !!zhipuApiKey;
-
-    if (canUseGemini) {
-        try {
-            console.log("[SkyStory] Trying Gemini (VPN check)...");
-            // Set a timeout of 10 seconds. 
-            // If user has VPN, it usually connects in 1-3s. 
-            // If no VPN, it hangs, so we kill it at 10s to switch to Zhipu.
-            resultText = await Promise.race([
-                callGeminiAI(base64Image, prompt),
-                timeoutPromise(10000, "Gemini") 
-            ]);
-            usedModel = "Gemini";
-            console.log("[SkyStory] Gemini Connected Successfully.");
-        } catch (geminiError: any) {
-            console.warn("[SkyStory] Gemini unreachable (VPN off? or Timeout). Switching to Fallback.", geminiError.message);
-            
-            if (canUseZhipu) {
-                 console.log("[SkyStory] Fallback: Using Zhipu AI.");
-                 resultText = await Promise.race([
-                    callZhipuAI(dataUrl, prompt),
-                    timeoutPromise(45000, "Zhipu")
-                ]);
-                usedModel = "Zhipu";
-            } else {
-                // If Zhipu key is also missing, we have to throw the original Gemini error
-                throw new Error("Connection failed. Please enable VPN for Gemini, or configure ZHIPU_API_KEY.");
-            }
-        }
-    } else if (canUseZhipu) {
-        // No Gemini key configured at all
-        console.log("[SkyStory] No Gemini Key. Using Zhipu Direct.");
+    // Explicit Routing based on Region
+    if (region === NetworkRegion.GLOBAL) {
+         console.log("[SkyStory] Mode: GLOBAL (Gemini)");
+         // 10s timeout for Gemini
+         resultText = await Promise.race([
+            callGeminiAI(base64Image, prompt),
+            timeoutPromise(10000, "Gemini (Global)") 
+        ]);
+    } else {
+        console.log("[SkyStory] Mode: CN (Zhipu)");
+        // 45s timeout for Zhipu (Vision can be slow)
         resultText = await Promise.race([
             callZhipuAI(dataUrl, prompt),
-            timeoutPromise(45000, "Zhipu")
+            timeoutPromise(45000, "Zhipu (Domestic)")
         ]);
-        usedModel = "Zhipu";
-    } else {
-        throw new Error("No API Keys configured.");
     }
 
     if (!resultText) throw new Error("No response from AI Service");
@@ -255,17 +225,7 @@ export const analyzeSkyImage = async (
   } catch (error: any) {
     console.error("SkyStory Analysis Error:", error);
     
-    return {
-      category: SkyCategory.UNKNOWN,
-      scientificName: 'Connection Error',
-      translatedName: '连接失败',
-      poeticExpression: 'The clouds are unreachable.',
-      proverb: error.message || 'Check Network/VPN',
-      proverbTranslation: 'Please check settings.',
-      dominantColors: ['#000000', '#333333', '#666666'], 
-      timestamp: Date.now(),
-      imageUrl: `data:image/jpeg;base64,${base64Image}`,
-      language: language
-    };
+    // Rethrow to let the UI handle the specific "Switch Region" logic if needed
+    throw error;
   }
 };

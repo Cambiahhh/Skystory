@@ -13,6 +13,11 @@ export enum SkyMode {
   STAR = 'STAR' 
 }
 
+export enum NetworkRegion {
+  GLOBAL = 'GLOBAL', // Uses Gemini (Needs VPN)
+  CN = 'CN'          // Uses Zhipu (Domestic)
+}
+
 // Language for the Generated Content (Poetry)
 export enum TargetLanguage {
   EN = 'English',
@@ -92,4 +97,5 @@ export interface AppSettings {
   cardLanguage: TargetLanguage; 
   saveToDevice: boolean;
   aspectRatio: AspectRatio;
+  region: NetworkRegion;
 }
