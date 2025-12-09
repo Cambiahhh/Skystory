@@ -5,19 +5,15 @@ import { GEMINI_MODEL, ZHIPU_MODEL, SYSTEM_INSTRUCTION } from '../constants';
 
 // --- Configuration ---
 
-// Helper to safely get env vars in various environments (Vite, CRA, Next.js)
 const getEnvVar = (key: string): string | undefined => {
-  // 1. Standard process.env
   if (typeof process !== 'undefined' && process.env && process.env[key]) {
     return process.env[key];
   }
-  // 2. Vite (import.meta.env)
   // @ts-ignore
   if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[`VITE_${key}`]) {
     // @ts-ignore
     return import.meta.env[`VITE_${key}`];
   }
-  // 3. React Scripts (CRA)
   if (typeof process !== 'undefined' && process.env && process.env[`REACT_APP_${key}`]) {
     return process.env[`REACT_APP_${key}`];
   }
@@ -26,7 +22,6 @@ const getEnvVar = (key: string): string | undefined => {
 
 // 1. Google Gemini Config
 const geminiApiKey = getEnvVar('GEMINI_API_KEY') || getEnvVar('API_KEY');
-// Allow custom Base URL if user uses a proxy service specifically
 const geminiBaseUrl = getEnvVar('GEMINI_BASE_URL'); 
 
 const googleAI = geminiApiKey ? new GoogleGenAI({ 
@@ -42,6 +37,22 @@ const timeoutPromise = (ms: number, name: string) => new Promise<never>((_, reje
   setTimeout(() => reject(new Error(`${name} Request timed out after ${ms}ms`)), ms);
 });
 
+// Helper: Clean JSON
+const extractJSON = (text: string): string => {
+    let cleaned = text.trim();
+    // Remove Markdown code blocks if present
+    cleaned = cleaned.replace(/```json/g, '').replace(/```/g, '');
+    
+    // Find the first '{' and last '}'
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    
+    if (firstBrace !== -1 && lastBrace !== -1) {
+        return cleaned.substring(firstBrace, lastBrace + 1);
+    }
+    return cleaned;
+};
+
 // --- API Implementation: Gemini ---
 
 const callGeminiAI = async (
@@ -49,8 +60,6 @@ const callGeminiAI = async (
   prompt: string
 ): Promise<string> => {
   if (!googleAI) throw new Error("Gemini API Key is missing");
-
-  // console.log(`[SkyStory] Attempting Gemini...`);
 
   const response = await googleAI.models.generateContent({
     model: GEMINI_MODEL,
@@ -104,7 +113,15 @@ const callZhipuAI = async (
     messages: [
       {
         role: "system",
-        content: SYSTEM_INSTRUCTION + "\n\nIMPORTANT: Return ONLY raw JSON. Do not use Markdown code blocks."
+        content: `
+        ${SYSTEM_INSTRUCTION}
+        
+        CRITICAL OUTPUT RULES:
+        1. You must output VALID JSON only. 
+        2. Do not include any markdown formatting, backticks, or conversational text.
+        3. Ensure all fields (translatedName, poeticExpression, proverb) are translated into the requested Target Language.
+        4. The keys of the JSON must remain in English.
+        `
       },
       {
         role: "user",
@@ -153,23 +170,23 @@ export const analyzeSkyImage = async (
   base64Image: string,
   language: TargetLanguage,
   mode: SkyMode,
-  region: NetworkRegion // NEW: Explicit region passed from App settings
+  region: NetworkRegion
 ): Promise<SkyAnalysisResult> => {
   
   try {
     const prompt = `
-      Analyze this image of the sky. 
-      Identify if it contains clouds, sun events (sunrise/sunset), or moon phases.
-      The target language is ${language}.
-      Return a valid JSON object matching the schema:
+      Task: Analyze this sky image.
+      Target Language: ${language}.
+      
+      Required JSON Structure:
       {
         "category": "One of [Cumulus, Stratus, Cirrus, Nimbus, Contrail, Clear, Sunrise, Sunset, Golden Hour, Blue Hour, Crescent Moon, Quarter Moon, Gibbous Moon, Full Moon]",
-        "scientificName": "Scientific name string",
-        "translatedName": "Name in target language",
-        "poeticExpression": "Max 15 words poetic description in target language",
-        "proverb": "Weather proverb/myth in target language",
-        "proverbTranslation": "English translation of proverb",
-        "dominantColors: ["#hex1", "#hex2", "#hex3"] (Top to bottom gradient)
+        "scientificName": "Scientific name (in English)",
+        "translatedName": "Name (in ${language})",
+        "poeticExpression": "A romantic, emotional, short poem about this sky (in ${language}, max 15 words)",
+        "proverb": "A weather proverb or myth (in ${language})",
+        "proverbTranslation": "English translation of the proverb",
+        "dominantColors": ["#hex1", "#hex2", "#hex3"]
       }
     `;
 
@@ -179,14 +196,14 @@ export const analyzeSkyImage = async (
     // Explicit Routing based on Region
     if (region === NetworkRegion.GLOBAL) {
          console.log("[SkyStory] Mode: GLOBAL (Gemini)");
-         // INCREASED TIMEOUT to 30s
+         // 30s timeout
          resultText = await Promise.race([
             callGeminiAI(base64Image, prompt),
             timeoutPromise(30000, "Gemini (Global)") 
         ]);
     } else {
         console.log("[SkyStory] Mode: CN (Zhipu)");
-        // INCREASED TIMEOUT to 60s
+        // 60s timeout
         resultText = await Promise.race([
             callZhipuAI(dataUrl, prompt),
             timeoutPromise(60000, "Zhipu (Domestic)")
@@ -195,16 +212,16 @@ export const analyzeSkyImage = async (
 
     if (!resultText) throw new Error("No response from AI Service");
 
-    // 3. Parse Result
-    let cleanedText = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
+    // 3. Parse Result (Robust)
+    const cleanedText = extractJSON(resultText);
     
-    const firstBrace = cleanedText.indexOf('{');
-    const lastBrace = cleanedText.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace !== -1) {
-        cleanedText = cleanedText.substring(firstBrace, lastBrace + 1);
+    let data;
+    try {
+        data = JSON.parse(cleanedText) as Omit<SkyAnalysisResult, 'timestamp' | 'imageUrl' | 'language'>;
+    } catch (parseError) {
+        console.error("JSON Parse Error. Raw Text:", resultText);
+        throw new Error("Failed to parse AI response. " + parseError);
     }
-
-    const data = JSON.parse(cleanedText) as Omit<SkyAnalysisResult, 'timestamp' | 'imageUrl' | 'language'>;
     
     // Ensure category is a valid enum
     let category = data.category as SkyCategory;

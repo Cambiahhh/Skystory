@@ -7,7 +7,7 @@ import SkyJournal from './components/SkyJournal';
 import SettingsView from './components/SettingsView';
 import TutorialOverlay from './components/TutorialOverlay';
 import WelcomeScreen from './components/WelcomeScreen';
-import NetworkErrorModal from './components/NetworkErrorModal'; // New Import
+import NetworkErrorModal from './components/NetworkErrorModal'; 
 import { analyzeSkyImage } from './services/geminiService';
 import { AppView, SkyAnalysisResult, TargetLanguage, JournalEntry, SkyMode, AppSettings, FilterType, AppLanguage, NetworkRegion } from './types';
 import { DEFAULT_SETTINGS, UI_TEXT } from './constants';
@@ -33,7 +33,13 @@ export const App: React.FC = () => {
 
   // Network Error State
   const [showNetworkError, setShowNetworkError] = useState(false);
-  const [failedImageContext, setFailedImageContext] = useState<{base64: string, id: string} | null>(null);
+  // We store the context needed to retry the failed operation
+  const [retryContext, setRetryContext] = useState<{
+      type: 'capture' | 'reprint',
+      base64: string,
+      id?: string, // for capture
+      targetLang?: TargetLanguage // for reprint
+  } | null>(null);
 
   // Init
   useEffect(() => {
@@ -45,15 +51,13 @@ export const App: React.FC = () => {
       } catch (e) { console.error("Failed to load journal", e); }
     }
 
-    // 2. Load Settings with Migration
+    // 2. Load Settings
     const savedSettings = localStorage.getItem('skystory_settings');
     const hasOnboarded = localStorage.getItem('skystory_onboarded');
 
     if (savedSettings) {
       try {
         const parsed = JSON.parse(savedSettings);
-        // Migration: Map defaultFilmStock to cardLanguage if it exists and cardLanguage doesn't
-        // Migration: Ensure region exists
         const merged: AppSettings = {
             ...DEFAULT_SETTINGS,
             ...parsed,
@@ -63,7 +67,6 @@ export const App: React.FC = () => {
         setSettings(merged);
       } catch (e) { console.error("Failed to load settings", e); }
     } else {
-        // First time load, or settings cleared -> Show Welcome
         setShowWelcome(true);
     }
 
@@ -74,11 +77,9 @@ export const App: React.FC = () => {
   }, []);
 
   const handleWelcomeComplete = (lang: AppLanguage, region: NetworkRegion) => {
-      // Save initial choices
       const newSettings = { ...settings, appLanguage: lang, region: region };
       setSettings(newSettings);
       localStorage.setItem('skystory_settings', JSON.stringify(newSettings));
-      
       setShowWelcome(false);
       setShowTutorial(true);
   };
@@ -86,20 +87,18 @@ export const App: React.FC = () => {
   const handleTutorialClose = () => {
       setShowTutorial(false);
       localStorage.setItem('skystory_onboarded', 'true');
-      localStorage.setItem('skystory_tutorial_seen', 'true'); // legacy support
+      localStorage.setItem('skystory_tutorial_seen', 'true');
   };
 
   const handleOpenTutorial = () => {
       setShowTutorial(true);
   };
 
-  // Persist Settings
   const updateSettings = (newSettings: AppSettings) => {
     setSettings(newSettings);
     localStorage.setItem('skystory_settings', JSON.stringify(newSettings));
   };
 
-  // Navigation Handlers
   const handleSelectMode = (selectedMode: SkyMode) => {
     setMode(selectedMode);
     setCurrentView(AppView.CAMERA);
@@ -118,7 +117,8 @@ export const App: React.FC = () => {
       updateSettings({ ...settings, region: newRegion });
   };
 
-  // Re-usable Analysis Function to support Retry
+  // --- CORE ANALYSIS LOGIC ---
+
   const runAnalysis = async (base64Data: string, entryId: string, currentSettings: AppSettings) => {
       try {
         const result = await analyzeSkyImage(base64Data, currentSettings.cardLanguage, mode, currentSettings.region);
@@ -136,18 +136,54 @@ export const App: React.FC = () => {
         });
 
       } catch (error) {
-        console.error("Analysis failed", error);
+        console.error("Capture Analysis failed", error);
         
-        // Remove pending entry on failure logic OR keep it as 'failed' status (user preference often calls for cleanup or retry)
-        // Here we'll clean up for now, but save context for retry modal
+        // Remove the pending entry so it doesn't get stuck
         setJournal(prev => prev.filter(e => e.id !== entryId));
 
-        setFailedImageContext({ base64: base64Data, id: entryId });
+        // Trigger Error Modal
+        setRetryContext({ type: 'capture', base64: base64Data, id: entryId });
         setShowNetworkError(true);
       } 
   };
 
-  // Analysis Logic (Async)
+  const runReprint = async (base64Data: string, targetLang: TargetLanguage, currentSettings: AppSettings) => {
+      if (!currentResult) return;
+      const targetTimestamp = currentResult.timestamp;
+
+      try {
+        const newResult = await analyzeSkyImage(base64Data, targetLang, mode, currentSettings.region);
+        
+        const updatedResult = { ...newResult, timestamp: targetTimestamp, imageUrl: currentResult.imageUrl };
+        
+        setCurrentResult(updatedResult);
+        setJournal(prev => {
+          const updated = prev.map(entry => {
+             if (entry.imageUrl === currentResult.imageUrl && entry.timestamp === targetTimestamp) {
+                 return { ...entry, ...updatedResult, status: 'completed' } as JournalEntry;
+             }
+             return entry;
+          });
+          localStorage.setItem('skystory_journal', JSON.stringify(updated));
+          return updated;
+        });
+
+      } catch (error) {
+          console.error("Reprint failed", error);
+          
+          // Reset status to completed
+          setJournal(prev => prev.map(e => e.timestamp === targetTimestamp ? { ...e, status: 'completed' } as JournalEntry : e));
+          
+          // Trigger Error Modal
+          setRetryContext({ type: 'reprint', base64: base64Data, targetLang: targetLang });
+          setShowNetworkError(true);
+      } finally {
+          setReprinting(false);
+      }
+  };
+
+  // --- UI HANDLERS ---
+
   const handleImageSelected = async (file: File) => {
     setFlash(true);
     setTimeout(() => setFlash(false), 300);
@@ -162,14 +198,14 @@ export const App: React.FC = () => {
       const base64Data = base64String.split(',')[1]; 
       const imageUrl = `data:image/jpeg;base64,${base64Data}`;
 
-      // 1. Create Pending Entry Immediately
+      // 1. Create Pending Entry
       const pendingEntry: JournalEntry = {
           id: entryId,
           status: 'pending',
           imageUrl: imageUrl,
           timestamp: Date.now(),
           type: 'unknown',
-          filter: FilterType.NATURAL // Default filter
+          filter: FilterType.NATURAL 
       };
 
       setJournal(prev => {
@@ -178,7 +214,7 @@ export const App: React.FC = () => {
           return updated;
       });
 
-      // 2. Show "Captured" Notification once
+      // 2. Notification
       setShowNotification(true);
       setTimeout(() => setShowNotification(false), 5000); 
 
@@ -187,104 +223,90 @@ export const App: React.FC = () => {
     };
   };
 
-  // Error Modal Handlers
+  const handleReprint = async (newLang: TargetLanguage) => {
+    if (!currentResult || !currentResult.imageUrl) return;
+    setReprinting(true);
+    
+    // Mark Journal Entry as Reprinting
+    setJournal(prev => prev.map(entry => 
+        entry.timestamp === currentResult.timestamp ? { ...entry, status: 'reprinting' } as JournalEntry : entry
+    ));
+
+    const base64Data = currentResult.imageUrl.split(',')[1];
+    
+    // Slight delay for UI feel
+    await new Promise(r => setTimeout(r, 600));
+
+    await runReprint(base64Data, newLang, settings);
+  };
+
+  // --- MODAL HANDLERS ---
+
   const handleNetworkSwitch = () => {
-      // 1. Switch Settings
       const newSettings = { ...settings, region: NetworkRegion.CN };
       updateSettings(newSettings);
       setShowNetworkError(false);
       
-      // 2. Retry immediately if context exists
-      if (failedImageContext) {
-          // Re-create the pending entry first
-          const imageUrl = `data:image/jpeg;base64,${failedImageContext.base64}`;
-          const pendingEntry: JournalEntry = {
-            id: failedImageContext.id,
-            status: 'pending',
-            imageUrl: imageUrl,
-            timestamp: Date.now(),
-            type: 'unknown',
-            filter: FilterType.NATURAL
-          };
-          setJournal(prev => [pendingEntry, ...prev]);
-          
-          runAnalysis(failedImageContext.base64, failedImageContext.id, newSettings);
+      // Retry immediately with new settings
+      if (retryContext) {
+          if (retryContext.type === 'capture' && retryContext.id) {
+              // Re-add pending entry visually
+              const imageUrl = `data:image/jpeg;base64,${retryContext.base64}`;
+              const pendingEntry: JournalEntry = {
+                  id: retryContext.id,
+                  status: 'pending',
+                  imageUrl: imageUrl,
+                  timestamp: Date.now(),
+                  type: 'unknown',
+                  filter: FilterType.NATURAL 
+              };
+              setJournal(prev => [pendingEntry, ...prev]);
+              runAnalysis(retryContext.base64, retryContext.id, newSettings);
+          } else if (retryContext.type === 'reprint' && retryContext.targetLang) {
+              setReprinting(true);
+              // Set journal status back to reprinting
+              if (currentResult) {
+                 setJournal(prev => prev.map(entry => 
+                    entry.timestamp === currentResult.timestamp ? { ...entry, status: 'reprinting' } as JournalEntry : entry
+                 ));
+              }
+              runReprint(retryContext.base64, retryContext.targetLang, newSettings);
+          }
       }
   };
 
   const handleNetworkRetry = () => {
       setShowNetworkError(false);
-      if (failedImageContext) {
-          // Re-create pending
-          const imageUrl = `data:image/jpeg;base64,${failedImageContext.base64}`;
-          const pendingEntry: JournalEntry = {
-            id: failedImageContext.id,
-            status: 'pending',
-            imageUrl: imageUrl,
-            timestamp: Date.now(),
-            type: 'unknown',
-            filter: FilterType.NATURAL
-          };
-          setJournal(prev => [pendingEntry, ...prev]);
-
-          runAnalysis(failedImageContext.base64, failedImageContext.id, settings);
+      if (retryContext) {
+          if (retryContext.type === 'capture' && retryContext.id) {
+              const imageUrl = `data:image/jpeg;base64,${retryContext.base64}`;
+              const pendingEntry: JournalEntry = {
+                  id: retryContext.id,
+                  status: 'pending',
+                  imageUrl: imageUrl,
+                  timestamp: Date.now(),
+                  type: 'unknown',
+                  filter: FilterType.NATURAL 
+              };
+              setJournal(prev => [pendingEntry, ...prev]);
+              runAnalysis(retryContext.base64, retryContext.id, settings);
+          } else if (retryContext.type === 'reprint' && retryContext.targetLang) {
+              setReprinting(true);
+               if (currentResult) {
+                 setJournal(prev => prev.map(entry => 
+                    entry.timestamp === currentResult.timestamp ? { ...entry, status: 'reprinting' } as JournalEntry : entry
+                 ));
+              }
+              runReprint(retryContext.base64, retryContext.targetLang, settings);
+          }
       }
   };
 
   const handleNetworkCancel = () => {
       setShowNetworkError(false);
-      setFailedImageContext(null);
+      setRetryContext(null);
   };
 
-  // Reprint Logic
-  const handleReprint = async (newLang: TargetLanguage) => {
-    if (!currentResult || !currentResult.imageUrl) return;
-    setReprinting(true);
-    const targetTimestamp = currentResult.timestamp;
-    
-    // Mark Journal Entry as Reprinting
-    setJournal(prev => prev.map(entry => 
-        entry.timestamp === targetTimestamp ? { ...entry, status: 'reprinting' } as JournalEntry : entry
-    ));
-
-    const base64Data = currentResult.imageUrl.split(',')[1];
-
-    try {
-        await new Promise(r => setTimeout(r, 600));
-        const newResult = await analyzeSkyImage(base64Data, newLang, mode, settings.region);
-        
-        const updatedResult = { ...newResult, timestamp: currentResult.timestamp, imageUrl: currentResult.imageUrl };
-        
-        setCurrentResult(updatedResult);
-        setJournal(prev => {
-          const updated = prev.map(entry => {
-             if (entry.imageUrl === currentResult.imageUrl && entry.timestamp === currentResult.timestamp) {
-                 return { ...entry, ...updatedResult, status: 'completed' } as JournalEntry;
-             }
-             return entry;
-          });
-          localStorage.setItem('skystory_journal', JSON.stringify(updated));
-          return updated;
-        });
-
-    } catch (error) {
-        console.error("Reprint failed", error);
-        // Show Network Error Modal for reprint failures too, but we need to handle context slightly differently
-        // For simplicity in this prompt update, we alert, or we could wire up the modal. 
-        // Given user request was mainly about initial capture flow:
-        if (settings.region === NetworkRegion.GLOBAL) {
-             // We can reuse the modal logic here if we wanted, but let's keep it simple for reprint to avoid state complexity hell
-             alert(UI_TEXT[settings.appLanguage].hazyError); 
-        } else {
-             alert(settings.appLanguage === 'CN' ? '显影失败，请检查网络连接' : 'Developing failed. Check connection.');
-        }
-        setJournal(prev => prev.map(e => e.timestamp === targetTimestamp ? { ...e, status: 'completed' } as JournalEntry : e));
-    } finally {
-        setReprinting(false);
-    }
-  };
-
-  // Delete Logic
   const handleDeleteEntry = (id: string) => {
     setJournal(prev => {
       const updated = prev.filter(entry => entry.id !== id);
@@ -293,7 +315,6 @@ export const App: React.FC = () => {
     });
   };
   
-  // Reorder Logic
   const handleReorderEntries = (newEntries: JournalEntry[]) => {
       setJournal(newEntries);
       localStorage.setItem('skystory_journal', JSON.stringify(newEntries));
