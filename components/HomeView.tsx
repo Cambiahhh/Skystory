@@ -51,8 +51,8 @@ const HomeView: React.FC<HomeViewProps> = ({ onSelectMode, onOpenJournal, onOpen
 
       {/* --- Header Section --- */}
       <div className="z-10 w-full mt-10 flex flex-col items-center relative animate-in fade-in slide-in-from-top-4 duration-1000">
-        <h1 className="text-4xl md:text-5xl font-serif-display text-transparent bg-clip-text bg-gradient-to-b from-white to-white/50 tracking-[0.2em] uppercase drop-shadow-2xl text-center leading-normal ml-2">
-          Cambia
+        <h1 className="text-5xl md:text-6xl font-serif-display text-transparent bg-clip-text bg-gradient-to-b from-white to-white/50 tracking-[0.3em] uppercase drop-shadow-2xl text-center leading-normal pl-4">
+          Dew
         </h1>
         
         <p className="mt-4 text-white/40 font-serif-text italic text-[10px] tracking-[0.2em] uppercase">
@@ -143,7 +143,7 @@ const HomeView: React.FC<HomeViewProps> = ({ onSelectMode, onOpenJournal, onOpen
             )}
         </div>
 
-        <span className="font-serif-display italic text-[10px] tracking-[0.15em] text-white/30 hover:text-white/60 transition-colors cursor-default select-none">
+        <span className="font-handwriting text-[14px] text-white/40 hover:text-white/60 transition-colors cursor-default select-none -rotate-2">
             {t.philosophy.contact}
         </span>
       </div>
@@ -160,15 +160,17 @@ const HomeView: React.FC<HomeViewProps> = ({ onSelectMode, onOpenJournal, onOpen
               <div className="overflow-y-auto no-scrollbar py-8 px-4 flex flex-col items-center w-full">
                   <Feather size={24} className="text-white/30 mb-10" strokeWidth={0.5} />
                   
-                  <h2 className="text-lg font-serif-display text-white tracking-[0.25em] uppercase mb-8 opacity-90">
+                  <h2 className="text-lg font-serif-display text-white tracking-[0.2em] uppercase mb-8 opacity-90">
                       {t.philosophy.title}
                   </h2>
+                  
+                  <div className="w-8 h-[1px] bg-white/20 mb-8"></div>
                   
                   <p className="max-w-[280px] mx-auto font-serif-text text-[13px] leading-loose text-white/70 font-light tracking-wide whitespace-pre-line">
                       {t.philosophy.content}
                   </p>
 
-                  <div className="w-12 h-[1px] bg-white/10 my-12"></div>
+                  <div className="w-8 h-[1px] bg-white/20 my-10"></div>
                   
                   {/* Styled Artistic Signature */}
                   <div className="flex flex-col items-center">

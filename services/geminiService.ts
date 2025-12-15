@@ -25,6 +25,9 @@ const timeoutPromise = (ms: number, name: string) => new Promise<never>((_, reje
   setTimeout(() => reject(new Error(`${name} Request timed out after ${ms/1000}s`)), ms);
 });
 
+// Helper for delay
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 const extractJSON = (text: string): string => {
     let cleaned = text.trim();
     // Remove code blocks if present
@@ -40,7 +43,7 @@ const extractJSON = (text: string): string => {
 
 // --- CORE PROMPT LOGIC ---
 const LENS_AND_LAND_INSTRUCTION = `
-You are "Dew", a poetic AI curator for nature.
+You are "Cambia", a poetic AI curator for the app "Dew".
 Your task is to analyze the image, detect its domain (SKY or LAND), and provide a romantic, cultural translation.
 
 1. **DETECT DOMAIN**:
@@ -102,24 +105,51 @@ const callGeminiAI = async (
     }
   };
 
-  try {
-      const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-      });
-      if (!response.ok) {
-          const errText = await response.text();
-          throw new Error(`Gemini API Error (${response.status}): ${errText}`);
-      }
-      const data = await response.json();
-      const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!content) throw new Error("Gemini returned empty response.");
-      return content;
-  } catch (error: any) {
-      console.error("[SkyStory] Gemini Network Error:", error);
-      throw error;
+  // RETRY LOGIC FOR 503/429 ERRORS
+  const MAX_RETRIES = 3;
+  let attempt = 0;
+
+  while (attempt < MAX_RETRIES) {
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        // Handle Overloaded (503) or Rate Limit (429) specifically
+        if (response.status === 503 || response.status === 429) {
+            attempt++;
+            if (attempt >= MAX_RETRIES) {
+                const errText = await response.text();
+                throw new Error(`Gemini Server Busy (${response.status}) after retries: ${errText}`);
+            }
+            // Exponential backoff: 1s, 2s, 4s
+            const delay = Math.pow(2, attempt) * 1000;
+            console.warn(`[SkyStory] Gemini Busy (${response.status}). Retrying in ${delay}ms...`);
+            await wait(delay);
+            continue; // Retry loop
+        }
+
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`Gemini API Error (${response.status}): ${errText}`);
+        }
+
+        const data = await response.json();
+        const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!content) throw new Error("Gemini returned empty response.");
+        return content;
+
+    } catch (error: any) {
+        // If it's a network error (fetch failed completely), typically we throw.
+        // But if we want to be very resilient, we could retry network errors too.
+        // For now, only retry logic inside the loop handles status codes.
+        // If fetch throws (e.g. offline), we let it bubble up unless we want to retry that too.
+        throw error;
+    }
   }
+  throw new Error("Gemini request failed unexpectedly.");
 };
 
 const callZhipuAI = async (
@@ -161,30 +191,48 @@ const callZhipuAI = async (
     stream: false
   };
 
-  try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${zhipuApiKey}` 
-      },
-      body: JSON.stringify(payload)
-    });
+  const MAX_RETRIES = 2;
+  let attempt = 0;
 
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Zhipu API Error: ${response.status} ${errText}`);
+  while (attempt < MAX_RETRIES) {
+    try {
+        const response = await fetch(url, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${zhipuApiKey}` 
+        },
+        body: JSON.stringify(payload)
+        });
+
+        if (response.status === 503 || response.status === 429) {
+            attempt++;
+            if (attempt >= MAX_RETRIES) {
+                 const errText = await response.text();
+                 throw new Error(`Zhipu Server Busy (${response.status}): ${errText}`);
+            }
+            await wait(1500); // Simple wait for Zhipu
+            continue;
+        }
+
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`Zhipu API Error: ${response.status} ${errText}`);
+        }
+
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content;
+        if (!content) throw new Error("Empty response from Zhipu");
+        
+        return content;
+    } catch (error) {
+        console.error("[SkyStory] Zhipu Network/Parsing Error:", error);
+        if (attempt >= MAX_RETRIES - 1) throw error;
+        attempt++;
+        await wait(1000);
     }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) throw new Error("Empty response from Zhipu");
-    
-    return content;
-  } catch (error) {
-    console.error("[SkyStory] Zhipu Network/Parsing Error:", error);
-    throw error;
   }
+  throw new Error("Zhipu request failed.");
 };
 
 export const analyzeSkyImage = async (
@@ -215,11 +263,12 @@ export const analyzeSkyImage = async (
     const dataUrl = `data:image/jpeg;base64,${base64Image}`;
     let resultText = "";
     
+    // Increased timeouts slightly to account for retries
     if (region === NetworkRegion.GLOBAL) {
          console.log("[SkyStory] Mode: GLOBAL (Gemini)");
          resultText = await Promise.race([
             callGeminiAI(base64Image, prompt),
-            timeoutPromise(30000, "Gemini (Global)") 
+            timeoutPromise(60000, "Gemini (Global)") // Increased from 30s to 60s for retries
         ]);
     } else {
         console.log("[SkyStory] Mode: CN (Zhipu)");

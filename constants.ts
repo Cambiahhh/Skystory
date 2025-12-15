@@ -6,7 +6,7 @@ export const ZHIPU_MODEL = 'glm-4.6v-flash';
 
 // Updated System Instruction to force selection from the Lexicon
 export const SYSTEM_INSTRUCTION = `
-You are "Cambia", a poetic curator of nature. 
+You are "Cambia", a poetic curator for the app "Dew". 
 Your task is to analyze the image, determine if it is SKY or LAND, and categorize it strictly.
 
 1. **Categorization**: 
@@ -140,7 +140,7 @@ export const UI_TEXT = {
     reprint: "Reprint",
     reprinting: "Reprinting...",
     tapToEdit: "Tap text to edit",
-    journalTitle: "Cambia",
+    journalTitle: "Dew",
     journalWarning: "Memories are stored in browser cache.",
     emptyJournal: "No memories developed yet.",
     cameraError: "Camera unavailable",
@@ -162,21 +162,31 @@ export const UI_TEXT = {
       [FilterType.SUN]: "Sunlight"
     },
     philosophy: {
-      title: "The Art of Gazing",
-      content: `In an era of constant noise, we seem to have lost the ability to truly gaze.
+      title: "To the Observer",
+      content: `The city moves too fast.
+We often forget the gentleness above,
+And the vitality below.
 
-Cambia is not merely a tool for identification; it is an invitation to pause.
+But everything has a voice.
+Clouds write poems across the vast expanse;
+Flowers hide letters within the soil.
 
-The sky is a poem written in light. The earth is a library of silent stories.
+Dew is not meant to be a dry encyclopedia.
+It is a key, 
+Attempting to unlock these silent romances.
 
-We invite you to reclaim the lost art of observation. To find the divine in the mundane.
+We invite you to step away from the rush,
+If only for a moment.
+To capture the shape of the wind,
+To read the metaphors of a flower.
 
-Thank you for slowing down with us.`,
-      contact: "The Curator, Cambia"
+Let every ordinary moment become an eternal verse.
+May your eyes see the world anew.`,
+      contact: "Cambia"
     },
     install: "Install App",
     tutorial: {
-        welcome: "Welcome to Cambia",
+        welcome: "Welcome to Dew",
         welcomeDesc: "Swipe to learn how to read the world.",
         step1Title: "Look Up, Look Down",
         step1Desc: "Point your camera at the Sky to read clouds. Point it at plants to read their flower language. The app adapts automatically.",
@@ -246,23 +256,30 @@ Thank you for slowing down with us.`,
       [FilterType.SUN]: "暖阳"
     },
     philosophy: {
-      title: "重拾凝视",
-      content: `在这个步履匆匆的时代，我们似乎渐渐丧失了“凝视”的能力。
+      title: "给此刻的你",
+      content: `城市的光影太快，
+快到我们忘记了抬头的温柔，
+也忽略了低头的生机。
 
-Cambia 的存在，不是为了百科全书式的科普，而是为了给你一个短暂抽离的理由。
+万物皆有言语。
+云朵在长空中写诗，
+花草在泥土里藏信。
 
-天空不仅是气象的容器，它是头顶的诗篇；大地不仅是行走的依托，它是脚下的秘密。
+Dew 不想做一本枯燥的百科全书。
+它是一把钥匙，
+试图解开这些沉默的浪漫。
 
-去捕捉那些稍纵即逝的云，去阅读那些沉默不语的叶。
+我们想邀请你，从忙碌中短暂抽离。
+去捕捉风的形状，
+去阅读花的隐喻。
 
-让瞬间成为永恒，让日常拥有神性。
-
-谢谢你，愿意慢下来，与我们一同阅读世界。`,
-      contact: "Cambia 策展人"
+让每一个平凡的瞬间，都能成为一首永恒的诗。
+愿你的眼睛，重新看见世界。`,
+      contact: "Cambia"
     },
     install: "安装到桌面",
     tutorial: {
-        welcome: "欢迎来到 Cambia",
+        welcome: "欢迎来到 Dew",
         welcomeDesc: "简单的手势，带你读懂世界。",
         step1Title: "抬头，低头",
         step1Desc: "镜头对准天空，解读云朵；对准花草，解读花语。应用会根据你的拍摄角度自动切换模式。",
