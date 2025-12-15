@@ -2,7 +2,7 @@
 import { TargetLanguage, AppLanguage, FilterType, AspectRatio, SkyCategory, NetworkRegion, AppSettings } from './types';
 
 export const GEMINI_MODEL = 'gemini-2.5-flash';
-export const ZHIPU_MODEL = 'glm-4.6v-flash'; 
+export const ZHIPU_MODEL = 'glm-4v-flash'; 
 
 // Updated System Instruction to force selection from the Lexicon
 export const SYSTEM_INSTRUCTION = `

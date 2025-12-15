@@ -1,6 +1,6 @@
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ArrowLeft, Image as ImageIcon, SwitchCamera, Cloud, Leaf } from 'lucide-react';
+import { ArrowLeft, Image as ImageIcon, SwitchCamera, Cloud, Leaf, Camera } from 'lucide-react';
 import { SkyMode, NatureDomain } from '../types';
 import { useSmartMode } from '../hooks/useSmartMode';
 
@@ -19,6 +19,7 @@ const CameraView: React.FC<CameraViewProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [cameraActive, setCameraActive] = useState(false);
+  const [permissionDenied, setPermissionDenied] = useState(false);
   
   // Smart Mode Logic
   const { domain, debugBeta } = useSmartMode();
@@ -34,6 +35,7 @@ const CameraView: React.FC<CameraViewProps> = ({
 
   const startCamera = async (deviceId?: string) => {
     stopCamera();
+    setPermissionDenied(false);
     try {
       const constraints: MediaStreamConstraints = {
         video: deviceId 
@@ -52,6 +54,7 @@ const CameraView: React.FC<CameraViewProps> = ({
     } catch (err) {
       console.error("Camera error", err);
       setCameraActive(false);
+      setPermissionDenied(true);
     }
   };
 
@@ -104,10 +107,12 @@ const CameraView: React.FC<CameraViewProps> = ({
   };
 
   const handleCapture = async () => {
-    if (videoRef.current) {
+    // Only try to capture from video if the stream is actively running
+    if (cameraActive && videoRef.current) {
       const file = await processAndResizeImage(videoRef.current);
       onImageSelected(file);
     } else {
+        // Fallback to system camera / file picker
         fileInputRef.current?.click();
     }
   };
@@ -141,17 +146,32 @@ const CameraView: React.FC<CameraViewProps> = ({
           autoPlay 
           playsInline 
           muted
-          className="w-full h-full object-cover opacity-90 transition-all duration-700"
+          className={`w-full h-full object-cover transition-opacity duration-700 ${cameraActive ? 'opacity-100' : 'opacity-0'}`}
         />
         {!cameraActive && (
-             <div className="absolute inset-0 bg-slate-900 flex items-center justify-center">
-                 <div className={`w-64 h-64 rounded-full blur-3xl animate-pulse ${isSky ? 'bg-cyan-500/20' : 'bg-emerald-500/20'}`}></div>
+             <div className="absolute inset-0 bg-slate-900 flex flex-col items-center justify-center p-6 text-center">
+                 <div className={`w-64 h-64 rounded-full blur-3xl animate-pulse absolute ${isSky ? 'bg-cyan-500/20' : 'bg-emerald-500/20'}`}></div>
+                 
+                 {/* Explicit button for system camera if web cam fails */}
+                 <div className="relative z-10 flex flex-col items-center gap-4">
+                    <p className="text-white/50 text-sm font-serif-text tracking-wider">
+                        {permissionDenied ? "Camera Access Denied" : "Camera Initializing..."}
+                    </p>
+                    <button 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex items-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full text-white transition-all backdrop-blur-md"
+                    >
+                        <Camera size={18} />
+                        <span className="text-xs font-bold uppercase tracking-widest">Open System Camera</span>
+                    </button>
+                 </div>
              </div>
         )}
       </div>
 
       <canvas ref={canvasRef} className="hidden" />
-      <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
+      {/* capture="environment" hints the browser to use the rear camera directly */}
+      <input type="file" accept="image/*" capture="environment" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
 
       {/* --- Smart Lens UI Overlay --- */}
       <div className="absolute inset-0 z-10 flex flex-col justify-between p-6 pointer-events-none">
@@ -170,27 +190,29 @@ const CameraView: React.FC<CameraViewProps> = ({
                 </span>
             </div>
 
-            {devices.length > 1 && (
+            {devices.length > 1 && cameraActive && (
               <button onClick={handleSwitchCamera} className="p-2 rounded-full bg-black/20 text-white/70 hover:bg-black/40 backdrop-blur-sm transition">
                 <SwitchCamera size={24} />
               </button>
             )}
         </div>
 
-        {/* Dynamic Grid Overlay */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-50">
-            {/* Rule of Thirds - Horizontal */}
-            <div className={`absolute top-1/3 left-6 right-6 h-[1px] transition-colors duration-700 ${gridColor}`}></div>
-            <div className={`absolute top-2/3 left-6 right-6 h-[1px] transition-colors duration-700 ${gridColor}`}></div>
-            {/* Rule of Thirds - Vertical */}
-            <div className={`absolute left-1/3 top-24 bottom-24 w-[1px] transition-colors duration-700 ${gridColor}`}></div>
-            <div className={`absolute right-1/3 top-24 bottom-24 w-[1px] transition-colors duration-700 ${gridColor}`}></div>
-            
-            {/* Center Focus Reticle */}
-            <div className={`w-12 h-12 border transition-all duration-500 ${accentColor} opacity-80 flex items-center justify-center`}>
-                <div className={`w-1 h-1 rounded-full ${isSky ? 'bg-cyan-200' : 'bg-emerald-200'}`}></div>
+        {/* Dynamic Grid Overlay - Only show if camera is active to avoid cluttering the fallback UI */}
+        {cameraActive && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-50">
+                {/* Rule of Thirds - Horizontal */}
+                <div className={`absolute top-1/3 left-6 right-6 h-[1px] transition-colors duration-700 ${gridColor}`}></div>
+                <div className={`absolute top-2/3 left-6 right-6 h-[1px] transition-colors duration-700 ${gridColor}`}></div>
+                {/* Rule of Thirds - Vertical */}
+                <div className={`absolute left-1/3 top-24 bottom-24 w-[1px] transition-colors duration-700 ${gridColor}`}></div>
+                <div className={`absolute right-1/3 top-24 bottom-24 w-[1px] transition-colors duration-700 ${gridColor}`}></div>
+                
+                {/* Center Focus Reticle */}
+                <div className={`w-12 h-12 border transition-all duration-500 ${accentColor} opacity-80 flex items-center justify-center`}>
+                    <div className={`w-1 h-1 rounded-full ${isSky ? 'bg-cyan-200' : 'bg-emerald-200'}`}></div>
+                </div>
             </div>
-        </div>
+        )}
 
         {/* Bottom Bar */}
         <div className="w-full relative flex flex-col items-center pointer-events-auto">
