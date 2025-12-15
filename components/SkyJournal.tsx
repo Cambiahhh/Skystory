@@ -309,7 +309,7 @@ const JournalItem: React.FC<{
                              <span className="font-serif-text italic font-light text-[8px] text-white/80 tracking-widest drop-shadow-sm">
                                  {new Date(Number(entry.id)).toLocaleDateString().replace(/\//g, '.')}
                              </span>
-                             <span className="font-serif-display text-[10px] text-white tracking-[0.15em] drop-shadow-sm mt-0.5">SkyStory</span>
+                             <span className="font-serif-display text-[10px] text-white tracking-[0.15em] drop-shadow-sm mt-0.5">Dew</span>
                         </div>
                      </div>
                      <div className="absolute inset-0 bg-white/5 mix-blend-soft-light pointer-events-none"></div>

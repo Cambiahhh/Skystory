@@ -34,7 +34,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onComplete }) => {
         {/* Header */}
         <div className="text-center">
              <Cloud size={48} strokeWidth={1} className="mx-auto mb-6 text-white/80" />
-             <h1 className="text-4xl font-serif-display tracking-widest uppercase mb-2">SkyStory</h1>
+             <h1 className="text-4xl font-serif-display tracking-widest uppercase mb-2">Dew</h1>
              <p className="text-white/40 font-serif-text italic text-xs tracking-[0.2em]">{t.title}</p>
         </div>
 

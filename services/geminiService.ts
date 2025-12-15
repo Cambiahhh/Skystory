@@ -1,8 +1,6 @@
 
-import { SkyAnalysisResult, TargetLanguage, SkyMode, SkyCategory, NetworkRegion } from '../types';
-import { GEMINI_MODEL, ZHIPU_MODEL, SYSTEM_INSTRUCTION } from '../constants';
-
-// --- Configuration ---
+import { SkyAnalysisResult, TargetLanguage, SkyMode, SkyCategory, NetworkRegion, NatureDomain } from '../types';
+import { GEMINI_MODEL, ZHIPU_MODEL, SYSTEM_INSTRUCTION as BASE_INSTRUCTION } from '../constants';
 
 const getEnvVar = (key: string): string | undefined => {
   if (typeof process !== 'undefined' && process.env && process.env[key]) {
@@ -19,37 +17,48 @@ const getEnvVar = (key: string): string | undefined => {
   return undefined;
 };
 
-// 1. Google Gemini Config
 const geminiApiKey = getEnvVar('GEMINI_API_KEY') || getEnvVar('API_KEY');
-// Optional: Allow custom proxy URL for Gemini (e.g. https://my-proxy.com/v1beta/models)
 const geminiBaseUrl = getEnvVar('GEMINI_BASE_URL') || "https://generativelanguage.googleapis.com/v1beta";
-
-// 2. Zhipu AI Config
 const zhipuApiKey = getEnvVar('ZHIPU_API_KEY');
 
-// Helper: Timeout Promise
 const timeoutPromise = (ms: number, name: string) => new Promise<never>((_, reject) => {
   setTimeout(() => reject(new Error(`${name} Request timed out after ${ms/1000}s`)), ms);
 });
 
-// Helper: Clean JSON
 const extractJSON = (text: string): string => {
     let cleaned = text.trim();
-    // Remove Markdown code blocks if present
     cleaned = cleaned.replace(/```json/g, '').replace(/```/g, '');
-    
-    // Find the first '{' and last '}'
     const firstBrace = cleaned.indexOf('{');
     const lastBrace = cleaned.lastIndexOf('}');
-    
     if (firstBrace !== -1 && lastBrace !== -1) {
         return cleaned.substring(firstBrace, lastBrace + 1);
     }
     return cleaned;
 };
 
-// --- API Implementation: Gemini (REST API via Fetch) ---
-// Using fetch directly is often more reliable through VPNs/Proxies than the SDK
+// --- CORE PROMPT LOGIC ---
+const LENS_AND_LAND_INSTRUCTION = `
+You are "Dew", a poetic AI curator for nature.
+Your task is to analyze the image, detect its domain (SKY or LAND), and provide a romantic, cultural translation.
+
+1. **DETECT DOMAIN**:
+   - **SKY**: Clouds, Sun, Moon, Stars, Atmosphere, Lightning.
+   - **LAND**: Flowers, Plants, Trees, Leaves, Succulents, Fruit, Close-up nature.
+
+2. **CATEGORIZATION**:
+   - If SKY, strictly use: ['Cumulus', 'Stratus', 'Cirrus', 'Nimbus', 'Contrail', 'Clear', 'Sunrise', 'Sunset', 'Golden Hour', 'Blue Hour', 'Crescent Moon', 'Quarter Moon', 'Gibbous Moon', 'Full Moon'].
+   - If LAND, strictly use: ['Flower', 'Foliage', 'Tree', 'Succulent', 'Fruit'].
+
+3. **OUTPUT CONTENT**:
+   - **Scientific Name**: Precise naming (e.g., "Altocumulus" or "Rosa rubiginosa").
+   - **Poetic Expression**: Max 15 words. Romantic, emotional, deep.
+   - **Cultural Context (proverb)**: 
+     - For SKY: Provide a weather proverb, myth, or folklore.
+     - For LAND: Provide the "Flower Language" (Hanakotoba) or symbolic meaning. NOT biological facts.
+
+4. **COLORS**: Extract 3 hex codes.
+`;
+
 const callGeminiAI = async (
   base64Image: string,
   prompt: string
@@ -67,13 +76,13 @@ const callGeminiAI = async (
         { inline_data: { mime_type: "image/jpeg", data: base64Image } }
       ]
     }],
-    // We request plain text via JSON schema to ensure strictness, similar to SDK
     generationConfig: {
         response_mime_type: "application/json",
         response_schema: {
             type: "OBJECT",
             properties: {
-                category: { type: "STRING", enum: Object.values(SkyCategory) },
+                domain: { type: "STRING", enum: ["SKY", "LAND"] },
+                category: { type: "STRING" },
                 scientificName: { type: "STRING" },
                 translatedName: { type: "STRING" },
                 poeticExpression: { type: "STRING" },
@@ -81,41 +90,33 @@ const callGeminiAI = async (
                 proverbTranslation: { type: "STRING" },
                 dominantColors: { type: "ARRAY", items: { type: "STRING" } }
             },
-            required: ['category', 'scientificName', 'translatedName', 'poeticExpression', 'proverb', 'dominantColors']
+            required: ['domain', 'category', 'scientificName', 'translatedName', 'poeticExpression', 'proverb', 'dominantColors']
         }
     },
     system_instruction: {
-        parts: [{ text: SYSTEM_INSTRUCTION }]
+        parts: [{ text: LENS_AND_LAND_INSTRUCTION }]
     }
   };
 
   try {
       const response = await fetch(url, {
           method: 'POST',
-          headers: {
-              'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
       });
-
       if (!response.ok) {
           const errText = await response.text();
           throw new Error(`Gemini API Error (${response.status}): ${errText}`);
       }
-
       const data = await response.json();
       const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      
       if (!content) throw new Error("Gemini returned empty response.");
       return content;
-
   } catch (error: any) {
       console.error("[SkyStory] Gemini Network Error:", error);
       throw error;
   }
 };
-
-// --- API Implementation: Zhipu (GLM-4V) ---
 
 const callZhipuAI = async (
   base64Image: string,
@@ -132,13 +133,14 @@ const callZhipuAI = async (
       {
         role: "system",
         content: `
-        ${SYSTEM_INSTRUCTION}
+        ${LENS_AND_LAND_INSTRUCTION}
         
         CRITICAL OUTPUT RULES:
         1. You must output VALID JSON only. 
-        2. Do not include any markdown formatting, backticks, or conversational text.
+        2. Do not include any markdown formatting.
         3. Ensure all fields (translatedName, poeticExpression, proverb) are translated into the requested Target Language.
         4. The keys of the JSON must remain in English.
+        5. For 'proverb', if it is LAND domain, return the Flower Language/Symbolism.
         `
       },
       {
@@ -181,47 +183,42 @@ const callZhipuAI = async (
   }
 };
 
-
-// --- Main Analysis Function ---
-
 export const analyzeSkyImage = async (
   base64Image: string,
   language: TargetLanguage,
-  mode: SkyMode,
+  mode: SkyMode, 
   region: NetworkRegion
 ): Promise<SkyAnalysisResult> => {
   
   try {
     const prompt = `
-      Task: Analyze this sky image.
+      Task: Analyze this image. Determine if it's SKY or LAND.
       Target Language: ${language}.
       
-      Required JSON Structure:
+      Return JSON:
       {
-        "category": "One of [Cumulus, Stratus, Cirrus, Nimbus, Contrail, Clear, Sunrise, Sunset, Golden Hour, Blue Hour, Crescent Moon, Quarter Moon, Gibbous Moon, Full Moon]",
-        "scientificName": "Scientific name (in English)",
-        "translatedName": "Name (in ${language})",
-        "poeticExpression": "A romantic, emotional, short poem about this sky (in ${language}, max 15 words)",
-        "proverb": "A weather proverb or myth (in ${language})",
-        "proverbTranslation": "English translation of the proverb",
-        "dominantColors: ["#hex1", "#hex2", "#hex3"]
+        "domain": "SKY" or "LAND",
+        "category": "Strict Enum Value",
+        "scientificName": "Scientific name",
+        "translatedName": "Common name",
+        "poeticExpression": "Short poem (15 words)",
+        "proverb": "Weather Myth (Sky) OR Flower Language (Land)",
+        "proverbTranslation": "English translation",
+        "dominantColors": ["#hex1", "#hex2", "#hex3"]
       }
     `;
 
     const dataUrl = `data:image/jpeg;base64,${base64Image}`;
     let resultText = "";
     
-    // Explicit Routing based on Region
     if (region === NetworkRegion.GLOBAL) {
          console.log("[SkyStory] Mode: GLOBAL (Gemini)");
-         // 30s timeout
          resultText = await Promise.race([
             callGeminiAI(base64Image, prompt),
             timeoutPromise(30000, "Gemini (Global)") 
         ]);
     } else {
         console.log("[SkyStory] Mode: CN (Zhipu)");
-        // 60s timeout
         resultText = await Promise.race([
             callZhipuAI(dataUrl, prompt),
             timeoutPromise(60000, "Zhipu (Domestic)")
@@ -229,8 +226,6 @@ export const analyzeSkyImage = async (
     }
 
     if (!resultText) throw new Error("No response from AI Service");
-
-    // 3. Parse Result (Robust)
     const cleanedText = extractJSON(resultText);
     
     let data;
@@ -241,12 +236,12 @@ export const analyzeSkyImage = async (
         throw new Error("Failed to parse AI response. " + parseError);
     }
     
-    // Ensure category is a valid enum
+    // Validation
     let category = data.category as SkyCategory;
     const validCategories = Object.values(SkyCategory);
     if (!validCategories.includes(category)) {
-        const fuzzyMatch = validCategories.find(c => category.includes(c));
-        category = fuzzyMatch || SkyCategory.UNKNOWN;
+        if (data.domain === NatureDomain.LAND) category = SkyCategory.FLOWER;
+        else category = SkyCategory.UNKNOWN;
     }
 
     return {

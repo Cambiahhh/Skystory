@@ -7,10 +7,17 @@ export enum AppView {
   SETTINGS = 'SETTINGS'
 }
 
+// Deprecated: SkyMode is replaced by NatureDomain for logic, 
+// but we keep it to not break existing imports temporarily if needed.
+// In this refactor, we primarily use NatureDomain.
 export enum SkyMode {
   CLOUD = 'CLOUD',
-  // STAR mode is deprecated/hidden for now as per request
   STAR = 'STAR' 
+}
+
+export enum NatureDomain {
+  SKY = 'SKY',
+  LAND = 'LAND'
 }
 
 export enum NetworkRegion {
@@ -35,36 +42,42 @@ export enum AppLanguage {
   CN = 'CN'
 }
 
-// The Strict Lexicon for Sky Classification
+// Expanded Lexicon for Sky AND Land
 export enum SkyCategory {
-  // Clouds
-  CUMULUS = 'Cumulus', // 积云 (Heap)
-  STRATUS = 'Stratus', // 层云 (Layer)
-  CIRRUS = 'Cirrus',   // 卷云 (Curl)
-  NIMBUS = 'Nimbus',   // 雨云 (Rain)
+  // --- SKY DOMAIN ---
+  CUMULUS = 'Cumulus', // 积云
+  STRATUS = 'Stratus', // 层云
+  CIRRUS = 'Cirrus',   // 卷云
+  NIMBUS = 'Nimbus',   // 雨云
   CONTRAIL = 'Contrail', // 飞机云
-  
-  // Sun / Atmosphere
   CLEAR = 'Clear',     // 晴空
   SUNRISE = 'Sunrise', // 日出
   SUNSET = 'Sunset',   // 日落
   GOLDEN = 'Golden Hour', // 金时刻
   BLUE = 'Blue Hour',     // 蓝时刻
-  
-  // Moon (Added as requested)
-  CRESCENT = 'Crescent Moon', // 蛾眉月/残月
+  CRESCENT = 'Crescent Moon', // 蛾眉月
   QUARTER = 'Quarter Moon',   // 上/下弦月
   GIBBOUS = 'Gibbous Moon',   // 凸月
   FULL = 'Full Moon',         // 满月
   
+  // --- LAND DOMAIN (New) ---
+  FLOWER = 'Flower',       // 花卉
+  FOLIAGE = 'Foliage',     // 叶/绿植
+  TREE = 'Tree',           // 树木
+  SUCCULENT = 'Succulent', // 多肉
+  FRUIT = 'Fruit',         // 果实
+  
   UNKNOWN = 'Unknown'
 }
 
-export interface SkyAnalysisResult {
-  category: SkyCategory; // Strict category from Lexicon
-  scientificName: string; // Specific name (e.g., Altocumulus)
+export interface NatureAnalysisResult {
+  domain: NatureDomain; 
+  category: SkyCategory; 
+  scientificName: string; 
   translatedName: string; 
   poeticExpression: string; 
+  // For Sky: Weather Myth/Proverb
+  // For Land: Flower Language (Hanakotoba)
   proverb: string; 
   proverbTranslation: string; 
   dominantColors: string[];
@@ -72,6 +85,9 @@ export interface SkyAnalysisResult {
   imageUrl?: string;
   language: TargetLanguage; 
 }
+
+// Alias for backward compatibility
+export type SkyAnalysisResult = NatureAnalysisResult;
 
 export enum FilterType {
   ORIGINAL = 'original',
@@ -82,9 +98,9 @@ export enum FilterType {
   SUN = 'sun'
 }
 
-export interface JournalEntry extends Partial<SkyAnalysisResult> {
+export interface JournalEntry extends Partial<NatureAnalysisResult> {
   id: string;
-  status: 'pending' | 'completed' | 'failed' | 'reprinting'; // Added 'reprinting'
+  status: 'pending' | 'completed' | 'failed' | 'reprinting'; 
   imageUrl: string; 
   filter?: FilterType; 
   type?: string;

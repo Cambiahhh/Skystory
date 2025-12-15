@@ -1,6 +1,6 @@
 {
-  "name": "SkyStory",
-  "description": "Turn the sky into the most romantic language classroom. Identify clouds and stars with poetic translations.",
+  "name": "Dew",
+  "description": "Turn the world into poetry. Look Up for Sky, Look Down for Land.",
   "requestFramePermissions": [
     "camera",
     "geolocation"

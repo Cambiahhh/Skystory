@@ -1,6 +1,7 @@
+
 {
-  "name": "SkyStory",
-  "short_name": "SkyStory",
+  "name": "Dew",
+  "short_name": "Dew",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",

@@ -44,7 +44,6 @@ const ResultCard: React.FC<ResultCardProps> = ({
   const [showFeedback, setShowFeedback] = useState(false);
 
   // Animation State for Card Switching
-  // 'idle' | 'exiting-up' | 'exiting-down' | 'entering-up' | 'entering-down'
   const [animState, setAnimState] = useState<string>('idle');
   const pendingNavRef = useRef<'next' | 'prev' | null>(null);
 
@@ -370,7 +369,7 @@ const ResultCard: React.FC<ResultCardProps> = ({
           time.style.marginBottom = `${4 * SCALE_FACTOR}px`;
           rightCol.appendChild(time);
           const brand = document.createElement('div');
-          brand.innerText = "SkyStory";
+          brand.innerText = "Dew";
           brand.style.fontFamily = "'Cinzel', serif";
           brand.style.fontWeight = '400'; brand.style.fontSize = `${14 * SCALE_FACTOR}px`;
           brand.style.letterSpacing = '0.15em'; brand.style.color = 'rgba(255,255,255,0.95)';
@@ -465,7 +464,7 @@ const ResultCard: React.FC<ResultCardProps> = ({
       const image = canvas.toDataURL("image/png");
       const link = document.createElement('a');
       link.href = image;
-      link.download = `skystory-${isFlipped ? 'palette' : 'photo'}-${Date.now()}.png`;
+      link.download = `dew-${isFlipped ? 'palette' : 'photo'}-${Date.now()}.png`;
       link.click();
     } catch (error) { console.error(error); alert("Could not generate image."); }
   };
@@ -636,7 +635,7 @@ const ResultCard: React.FC<ResultCardProps> = ({
                                     {new Date(data.timestamp).toLocaleDateString().replace(/\//g, '.')}
                                 </span>
                                 <span className="font-serif-display text-[14px] text-white tracking-[0.15em] drop-shadow-sm mt-0.5">
-                                    SkyStory
+                                    Dew
                                 </span>
                             </div>
                         </div>
