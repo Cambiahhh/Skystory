@@ -90,10 +90,12 @@ const matchesColorFilter = (entry: JournalEntry, filter: ColorCategory | null): 
     return entry.dominantColors.some(hex => getColorCategory(hex) === filter);
 };
 
-// Check if entry matches category filter
+// Check if entry matches category filter (Case Insensitive)
 const matchesCategoryFilter = (entry: JournalEntry, filter: SkyCategory | null): boolean => {
     if (!filter) return true;
-    return entry.category === filter;
+    if (!entry.category) return false;
+    // Normalized comparison
+    return entry.category.toLowerCase() === filter.toLowerCase();
 }
 
 // --- End Helper Logic ---
@@ -181,6 +183,23 @@ const JournalItem: React.FC<{
     };
 
     const isProcessing = entry.status === 'pending' || entry.status === 'reprinting';
+
+    // Helper to get Label safely
+    const getCategoryLabel = (cat: string) => {
+        // Try exact match first
+        let labelData = CATEGORY_LABELS[cat as SkyCategory];
+        
+        // Try case-insensitive lookup
+        if (!labelData) {
+            const foundKey = Object.keys(CATEGORY_LABELS).find(
+                k => k.toLowerCase() === cat.toLowerCase()
+            ) as SkyCategory;
+            if (foundKey) labelData = CATEGORY_LABELS[foundKey];
+        }
+
+        if (!labelData) return cat; // Fallback to raw string
+        return appLang === 'CN' ? labelData.cn : labelData.en;
+    };
 
     return (
         <div 
@@ -273,7 +292,7 @@ const JournalItem: React.FC<{
                                     </span>
                                     <span className="text-[7px] text-slate-400 font-serif-text uppercase truncate max-w-[50px]">
                                     {entry.category && entry.category !== SkyCategory.UNKNOWN 
-                                        ? (appLang === 'CN' ? CATEGORY_LABELS[entry.category]?.cn : CATEGORY_LABELS[entry.category]?.en)
+                                        ? getCategoryLabel(entry.category)
                                         : (entry.type || 'Unknown')}
                                     </span>
                                 </div>
@@ -386,12 +405,20 @@ const SkyJournal: React.FC<SkyJournalProps> = ({ entries, onClose, onSelectEntry
   }, [entries, filterMode, activeColorFilter, activeTypeFilter]);
 
   // Extract available categories from current entries to only show relevant filters
+  // Case-Insensitive Set
   const availableCategories = useMemo(() => {
-      const cats = new Set<SkyCategory>();
+      const cats = new Set<string>();
       entries.forEach(e => {
-          if (e.category && e.category !== SkyCategory.UNKNOWN) cats.add(e.category);
+          if (e.category && e.category.toLowerCase() !== SkyCategory.UNKNOWN.toLowerCase()) {
+              // Store as proper SkyCategory if match found, else raw
+               const foundKey = Object.values(SkyCategory).find(
+                  k => k.toLowerCase() === e.category.toLowerCase()
+              );
+              if (foundKey) cats.add(foundKey);
+              else cats.add(e.category);
+          }
       });
-      return Array.from(cats).sort();
+      return Array.from(cats).sort() as SkyCategory[];
   }, [entries]);
 
   return (
@@ -502,7 +529,12 @@ const SkyJournal: React.FC<SkyJournalProps> = ({ entries, onClose, onSelectEntry
                                     : 'bg-white/5 text-white/60 border-white/10 hover:border-white/30'
                                 }`}
                               >
-                                  {appLang === 'CN' ? CATEGORY_LABELS[cat]?.cn : CATEGORY_LABELS[cat]?.en}
+                                  {/* Helper to safe translate even if legacy lowercase */}
+                                  {(() => {
+                                      const data = CATEGORY_LABELS[cat] || 
+                                          CATEGORY_LABELS[Object.keys(CATEGORY_LABELS).find(k => k.toLowerCase() === cat.toLowerCase()) as SkyCategory];
+                                      return data ? (appLang === 'CN' ? data.cn : data.en) : cat;
+                                  })()}
                               </button>
                           )) : (
                               <span className="text-white/30 text-[10px] italic">Collect more skies to unlock types.</span>

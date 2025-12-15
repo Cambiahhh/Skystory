@@ -52,7 +52,7 @@ const HomeView: React.FC<HomeViewProps> = ({ onSelectMode, onOpenJournal, onOpen
       {/* --- Header Section --- */}
       <div className="z-10 w-full mt-10 flex flex-col items-center relative animate-in fade-in slide-in-from-top-4 duration-1000">
         <h1 className="text-4xl md:text-5xl font-serif-display text-transparent bg-clip-text bg-gradient-to-b from-white to-white/50 tracking-[0.2em] uppercase drop-shadow-2xl text-center leading-normal ml-2">
-          Dew
+          Cambia
         </h1>
         
         <p className="mt-4 text-white/40 font-serif-text italic text-[10px] tracking-[0.2em] uppercase">
@@ -143,24 +143,39 @@ const HomeView: React.FC<HomeViewProps> = ({ onSelectMode, onOpenJournal, onOpen
             )}
         </div>
 
-        <span className="font-serif-text italic text-[10px] tracking-[0.15em] text-white/30 hover:text-white/60 transition-colors cursor-default select-none">
+        <span className="font-serif-display italic text-[10px] tracking-[0.15em] text-white/30 hover:text-white/60 transition-colors cursor-default select-none">
             {t.philosophy.contact}
         </span>
       </div>
       
       {/* --- Philosophy Modal --- */}
       {showPhilosophy && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/90 backdrop-blur-xl animate-in fade-in duration-500">
-           <div className="relative w-full max-w-sm max-h-[80vh] flex flex-col items-center text-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/95 backdrop-blur-3xl animate-in fade-in duration-700">
+           <div className="relative w-full max-w-sm max-h-[85vh] flex flex-col items-center text-center">
+              
               <button onClick={() => setShowPhilosophy(false)} className="absolute -top-12 p-2 text-white/50 hover:text-white transition-colors">
                 <X size={24} strokeWidth={1} />
               </button>
-              <div className="overflow-y-auto no-scrollbar py-4 px-2 space-y-8">
-                  <Feather size={24} className="mx-auto text-white/30 mb-8" strokeWidth={1} />
-                  <h2 className="text-xl font-serif-display text-white tracking-[0.2em] uppercase">{t.philosophy.title}</h2>
-                  <div className="w-8 h-[1px] bg-white/20 mx-auto"></div>
-                  <p className="font-serif-text text-sm leading-8 text-white/80 whitespace-pre-wrap">{t.philosophy.content}</p>
-                  <p className="font-serif-display text-xs text-white/50 uppercase tracking-widest mt-8">{t.philosophy.contact}</p>
+
+              <div className="overflow-y-auto no-scrollbar py-8 px-4 flex flex-col items-center w-full">
+                  <Feather size={24} className="text-white/30 mb-10" strokeWidth={0.5} />
+                  
+                  <h2 className="text-lg font-serif-display text-white tracking-[0.25em] uppercase mb-8 opacity-90">
+                      {t.philosophy.title}
+                  </h2>
+                  
+                  <p className="max-w-[280px] mx-auto font-serif-text text-[13px] leading-loose text-white/70 font-light tracking-wide whitespace-pre-line">
+                      {t.philosophy.content}
+                  </p>
+
+                  <div className="w-12 h-[1px] bg-white/10 my-12"></div>
+                  
+                  {/* Styled Artistic Signature */}
+                  <div className="flex flex-col items-center">
+                     <p className="font-handwriting text-3xl text-white/90 -rotate-3 select-none">
+                        {t.philosophy.contact}
+                     </p>
+                  </div>
               </div>
            </div>
         </div>

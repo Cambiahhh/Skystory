@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { SkyAnalysisResult, TargetLanguage, AppLanguage, FilterType, AppSettings, AspectRatio, JournalEntry } from '../types';
-import { LANGUAGES, UI_TEXT, PHOTO_FILTERS } from '../constants';
+import { LANGUAGES, UI_TEXT, PHOTO_FILTERS, TARGET_LANG_DISPLAY } from '../constants';
 import { Download, X, Globe, RefreshCw, Scan, RotateCw, ChevronUp, ChevronDown } from 'lucide-react';
 
 interface ResultCardProps {
@@ -680,7 +680,7 @@ const ResultCard: React.FC<ResultCardProps> = ({
                                 }}
                                 className={`w-full text-left px-5 py-3 text-[10px] uppercase tracking-widest hover:bg-white/10 transition flex items-center justify-between ${lang.code === data.language ? 'text-blue-400' : 'text-white/70'}`}
                             >
-                                <span>{lang.label.replace('Film: ', '')}</span>
+                                <span>{TARGET_LANG_DISPLAY[lang.code][appLang]}</span>
                                 {lang.code === data.language && <div className="w-1.5 h-1.5 bg-blue-400 rounded-full"></div>}
                             </button>
                         ))}

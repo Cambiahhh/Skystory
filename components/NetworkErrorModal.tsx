@@ -18,7 +18,7 @@ const NetworkErrorModal: React.FC<NetworkErrorModalProps> = ({ onSwitch, onRetry
         [AppLanguage.EN]: {
             title: "Connection Failed",
             defaultDesc: isGlobalMode 
-                ? "Global network (Gemini) is unresponsive. This usually requires a stable VPN." 
+                ? "Global network (Gemini) is unresponsive. Check your connection settings." 
                 : "Network request timed out.",
             switchBtn: "Switch to China Mode",
             retryBtn: "Retry Current",
@@ -27,7 +27,7 @@ const NetworkErrorModal: React.FC<NetworkErrorModalProps> = ({ onSwitch, onRetry
         [AppLanguage.CN]: {
             title: "连接失败",
             defaultDesc: isGlobalMode 
-                ? "海外线路 (Gemini) 无响应。请检查您的 VPN 设置。" 
+                ? "海外线路 (Gemini) 无响应。请检查您的网络连接设置。" 
                 : "网络请求超时，请检查您的网络连接。",
             switchBtn: "切换回国内模式 (CN)",
             retryBtn: "重试当前线路",

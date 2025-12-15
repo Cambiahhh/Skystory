@@ -2,7 +2,7 @@
 import React from 'react';
 import { X, Globe, Smartphone, Ratio, Wifi } from 'lucide-react';
 import { AppSettings, TargetLanguage, AppLanguage, AspectRatio, NetworkRegion } from '../types';
-import { LANGUAGES, UI_LANGUAGES, UI_TEXT } from '../constants';
+import { LANGUAGES, UI_LANGUAGES, UI_TEXT, TARGET_LANG_DISPLAY } from '../constants';
 
 interface SettingsViewProps {
   settings: AppSettings;
@@ -156,7 +156,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ settings, onUpdateSettings,
                         >
                             <span className="font-serif-display text-lg mb-1">{lang.flag}</span>
                             <span className="text-[9px] uppercase tracking-wider whitespace-nowrap">
-                                {lang.label.replace('Film: ', '')}
+                                {TARGET_LANG_DISPLAY[lang.code][settings.appLanguage]}
                             </span>
                         </button>
                     ))}

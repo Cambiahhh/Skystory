@@ -27,7 +27,9 @@ const timeoutPromise = (ms: number, name: string) => new Promise<never>((_, reje
 
 const extractJSON = (text: string): string => {
     let cleaned = text.trim();
+    // Remove code blocks if present
     cleaned = cleaned.replace(/```json/g, '').replace(/```/g, '');
+    // Find the first '{' and last '}' to handle any preamble/postscript text
     const firstBrace = cleaned.indexOf('{');
     const lastBrace = cleaned.lastIndexOf('}');
     if (firstBrace !== -1 && lastBrace !== -1) {
@@ -44,13 +46,15 @@ Your task is to analyze the image, detect its domain (SKY or LAND), and provide 
 1. **DETECT DOMAIN**:
    - **SKY**: Clouds, Sun, Moon, Stars, Atmosphere, Lightning.
    - **LAND**: Flowers, Plants, Trees, Leaves, Succulents, Fruit, Close-up nature.
+   - **OTHER**: If the image is primarily of people, animals, man-made objects, or indoors without nature focus, return domain "LAND" but category "Unknown".
 
 2. **CATEGORIZATION**:
-   - If SKY, strictly use: ['Cumulus', 'Stratus', 'Cirrus', 'Nimbus', 'Contrail', 'Clear', 'Sunrise', 'Sunset', 'Golden Hour', 'Blue Hour', 'Crescent Moon', 'Quarter Moon', 'Gibbous Moon', 'Full Moon'].
-   - If LAND, strictly use: ['Flower', 'Foliage', 'Tree', 'Succulent', 'Fruit'].
+   - If SKY, use: ['Cumulus', 'Stratus', 'Cirrus', 'Nimbus', 'Contrail', 'Clear', 'Sunrise', 'Sunset', 'Golden Hour', 'Blue Hour', 'Crescent Moon', 'Quarter Moon', 'Gibbous Moon', 'Full Moon']
+   - If LAND, use: ['Flower', 'Foliage', 'Tree', 'Succulent', 'Fruit']
+   - If unsure, ambiguous, or not nature, use: 'Unknown'
 
 3. **OUTPUT CONTENT**:
-   - **Scientific Name**: Precise naming (e.g., "Altocumulus" or "Rosa rubiginosa").
+   - **Scientific Name**: Precise naming (e.g., "Altocumulus" or "Rosa rubiginosa"). If unknown, use a descriptive title.
    - **Poetic Expression**: Max 15 words. Romantic, emotional, deep.
    - **Cultural Context (proverb)**: 
      - For SKY: Provide a weather proverb, myth, or folklore.
@@ -198,7 +202,7 @@ export const analyzeSkyImage = async (
       Return JSON:
       {
         "domain": "SKY" or "LAND",
-        "category": "Strict Enum Value",
+        "category": "Strict Enum Value or Unknown",
         "scientificName": "Scientific name",
         "translatedName": "Common name",
         "poeticExpression": "Short poem (15 words)",
@@ -236,17 +240,47 @@ export const analyzeSkyImage = async (
         throw new Error("Failed to parse AI response. " + parseError);
     }
     
-    // Validation
-    let category = data.category as SkyCategory;
-    const validCategories = Object.values(SkyCategory);
-    if (!validCategories.includes(category)) {
-        if (data.domain === NatureDomain.LAND) category = SkyCategory.FLOWER;
-        else category = SkyCategory.UNKNOWN;
+    // --- Validation & Normalization ---
+    
+    let category = data.category || 'Unknown';
+    let domain = data.domain || NatureDomain.LAND;
+    
+    // Helper to find matching enum value (case-insensitive)
+    const findEnumMatch = (val: string): SkyCategory | undefined => {
+        const normalized = val.toLowerCase().replace(/\s/g, '');
+        for (const enumVal of Object.values(SkyCategory)) {
+            if (enumVal.toLowerCase().replace(/\s/g, '') === normalized) {
+                return enumVal;
+            }
+        }
+        return undefined;
+    };
+
+    let matchedCategory = findEnumMatch(category);
+
+    // If no exact enum match, perform fuzzy mapping or fallback
+    if (!matchedCategory) {
+        const lowerCat = category.toLowerCase();
+        
+        if (lowerCat.includes('plant') || lowerCat.includes('leaf') || lowerCat.includes('grass') || lowerCat.includes('bush')) {
+            matchedCategory = SkyCategory.FOLIAGE;
+        } else if (lowerCat.includes('cloud')) {
+            matchedCategory = SkyCategory.CUMULUS; 
+        } else if (lowerCat.includes('moon')) {
+            matchedCategory = SkyCategory.FULL; 
+        } else {
+             // CRITICAL FIX: Do NOT default to FLOWER. Default to UNKNOWN if undefined.
+             matchedCategory = SkyCategory.UNKNOWN;
+        }
     }
+
+    // Safety check: ensure matchedCategory is one of the valid SkyCategory values
+    category = matchedCategory;
 
     return {
       ...data,
-      category,
+      domain: domain,
+      category: category as SkyCategory,
       timestamp: Date.now(),
       imageUrl: dataUrl,
       language: language

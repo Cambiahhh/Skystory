@@ -2,11 +2,11 @@
 import { TargetLanguage, AppLanguage, FilterType, AspectRatio, SkyCategory, NetworkRegion, AppSettings } from './types';
 
 export const GEMINI_MODEL = 'gemini-2.5-flash';
-export const ZHIPU_MODEL = 'glm-4v-flash'; 
+export const ZHIPU_MODEL = 'glm-4.6v-flash'; 
 
 // Updated System Instruction to force selection from the Lexicon
 export const SYSTEM_INSTRUCTION = `
-You are "Dew", a poetic curator of nature. 
+You are "Cambia", a poetic curator of nature. 
 Your task is to analyze the image, determine if it is SKY or LAND, and categorize it strictly.
 
 1. **Categorization**: 
@@ -55,14 +55,25 @@ export const CATEGORY_LABELS: Record<SkyCategory, { en: string, cn: string }> = 
   [SkyCategory.UNKNOWN]: { en: 'Unknown', cn: '未知' },
 };
 
-export const LANGUAGES: { code: TargetLanguage; label: string; flag: string }[] = [
-  { code: TargetLanguage.EN, label: 'Film: English', flag: 'EN' },
-  { code: TargetLanguage.CN, label: 'Film: Classic', flag: '繁' },
-  { code: TargetLanguage.CN_SIMPLE, label: 'Film: Modern', flag: '简' },
-  { code: TargetLanguage.JP, label: 'Film: Tokyo', flag: 'JP' },
-  { code: TargetLanguage.FR, label: 'Film: Paris', flag: 'FR' },
-  { code: TargetLanguage.KR, label: 'Film: Seoul', flag: 'KR' },
-  { code: TargetLanguage.ES, label: 'Film: Madrid', flag: 'ES' },
+// Localized Display Labels for Target Languages
+export const TARGET_LANG_DISPLAY: Record<TargetLanguage, { [key in AppLanguage]: string }> = {
+  [TargetLanguage.EN]: { [AppLanguage.EN]: 'English', [AppLanguage.CN]: '英语' },
+  [TargetLanguage.CN]: { [AppLanguage.EN]: 'Chinese (Trad)', [AppLanguage.CN]: '繁体中文' },
+  [TargetLanguage.CN_SIMPLE]: { [AppLanguage.EN]: 'Chinese (Simp)', [AppLanguage.CN]: '简体中文' },
+  [TargetLanguage.JP]: { [AppLanguage.EN]: 'Japanese', [AppLanguage.CN]: '日语' },
+  [TargetLanguage.FR]: { [AppLanguage.EN]: 'French', [AppLanguage.CN]: '法语' },
+  [TargetLanguage.KR]: { [AppLanguage.EN]: 'Korean', [AppLanguage.CN]: '韩语' },
+  [TargetLanguage.ES]: { [AppLanguage.EN]: 'Spanish', [AppLanguage.CN]: '西班牙语' },
+};
+
+export const LANGUAGES: { code: TargetLanguage; flag: string }[] = [
+  { code: TargetLanguage.EN, flag: 'EN' },
+  { code: TargetLanguage.CN, flag: '繁' },
+  { code: TargetLanguage.CN_SIMPLE, flag: '简' },
+  { code: TargetLanguage.JP, flag: 'JP' },
+  { code: TargetLanguage.FR, flag: 'FR' },
+  { code: TargetLanguage.KR, flag: 'KR' },
+  { code: TargetLanguage.ES, flag: 'ES' },
 ];
 
 export const UI_LANGUAGES = [
@@ -115,7 +126,7 @@ export const UI_TEXT = {
     appLang: "App Language",
     cardLang: "Card Language",
     networkRegion: "Network / Region",
-    regionGlobal: "Global (VPN Required)",
+    regionGlobal: "Global (International)",
     regionCN: "China Mainland",
     aspectRatio: "Photo Ratio",
     aspectRatioOpts: {
@@ -129,7 +140,7 @@ export const UI_TEXT = {
     reprint: "Reprint",
     reprinting: "Reprinting...",
     tapToEdit: "Tap text to edit",
-    journalTitle: "Dew",
+    journalTitle: "Cambia",
     journalWarning: "Memories are stored in browser cache.",
     emptyJournal: "No memories developed yet.",
     cameraError: "Camera unavailable",
@@ -151,13 +162,21 @@ export const UI_TEXT = {
       [FilterType.SUN]: "Sunlight"
     },
     philosophy: {
-      title: "Dew",
-      content: "We live in a world that rushes forward.\n\nThis app was built to give you a reason to pause. To breathe.\n\nLook Up. The sky is the world's oldest language.\n\nLook Down. The earth holds quiet stories in every leaf and flower.\n\nWe just help you translate them.\n\nThank you for seeing the world with us.",
-      contact: "SkyStory Team"
+      title: "The Art of Gazing",
+      content: `In an era of constant noise, we seem to have lost the ability to truly gaze.
+
+Cambia is not merely a tool for identification; it is an invitation to pause.
+
+The sky is a poem written in light. The earth is a library of silent stories.
+
+We invite you to reclaim the lost art of observation. To find the divine in the mundane.
+
+Thank you for slowing down with us.`,
+      contact: "The Curator, Cambia"
     },
     install: "Install App",
     tutorial: {
-        welcome: "Welcome to Dew",
+        welcome: "Welcome to Cambia",
         welcomeDesc: "Swipe to learn how to read the world.",
         step1Title: "Look Up, Look Down",
         step1Desc: "Point your camera at the Sky to read clouds. Point it at plants to read their flower language. The app adapts automatically.",
@@ -191,7 +210,7 @@ export const UI_TEXT = {
     appLang: "应用语言",
     cardLang: "卡片语言",
     networkRegion: "网络环境",
-    regionGlobal: "海外 (需 VPN)",
+    regionGlobal: "海外 (国际线路)",
     regionCN: "中国大陆",
     aspectRatio: "图片比例",
     aspectRatioOpts: {
@@ -227,13 +246,23 @@ export const UI_TEXT = {
       [FilterType.SUN]: "暖阳"
     },
     philosophy: {
-      title: "致每一个热爱观察的你",
-      content: "我们生活在一个匆忙的时代，\n大多数时候，我们沉浸在屏幕与日程表中。\n\nDew 的诞生，\n不仅仅是为了识别云彩或花朵，\n更是为了给你一个停下来的理由。\n\n抬头看天，那是世界最古老的语言。\n低头看地，每一株植物都有它的花语。\n\n去呼吸，去在平凡的日常中寻找片刻的浪漫。\n我们只是帮你翻译了它。\n\n谢谢你，和我们一起观察世界。",
-      contact: "SkyStory Team"
+      title: "重拾凝视",
+      content: `在这个步履匆匆的时代，我们似乎渐渐丧失了“凝视”的能力。
+
+Cambia 的存在，不是为了百科全书式的科普，而是为了给你一个短暂抽离的理由。
+
+天空不仅是气象的容器，它是头顶的诗篇；大地不仅是行走的依托，它是脚下的秘密。
+
+去捕捉那些稍纵即逝的云，去阅读那些沉默不语的叶。
+
+让瞬间成为永恒，让日常拥有神性。
+
+谢谢你，愿意慢下来，与我们一同阅读世界。`,
+      contact: "Cambia 策展人"
     },
     install: "安装到桌面",
     tutorial: {
-        welcome: "欢迎来到 Dew",
+        welcome: "欢迎来到 Cambia",
         welcomeDesc: "简单的手势，带你读懂世界。",
         step1Title: "抬头，低头",
         step1Desc: "镜头对准天空，解读云朵；对准花草，解读花语。应用会根据你的拍摄角度自动切换模式。",

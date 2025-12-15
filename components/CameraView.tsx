@@ -1,6 +1,6 @@
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ArrowLeft, Image as ImageIcon, SwitchCamera, Cloud, Leaf, Camera } from 'lucide-react';
+import { ArrowLeft, Image as ImageIcon, SwitchCamera, Cloud, Leaf, Camera, Loader2 } from 'lucide-react';
 import { SkyMode, NatureDomain } from '../types';
 import { useSmartMode } from '../hooks/useSmartMode';
 
@@ -20,6 +20,7 @@ const CameraView: React.FC<CameraViewProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   
   // Smart Mode Logic
   const { domain, debugBeta } = useSmartMode();
@@ -35,6 +36,7 @@ const CameraView: React.FC<CameraViewProps> = ({
 
   const startCamera = async (deviceId?: string) => {
     stopCamera();
+    setIsLoading(true);
     setPermissionDenied(false);
     try {
       const constraints: MediaStreamConstraints = {
@@ -46,7 +48,11 @@ const CameraView: React.FC<CameraViewProps> = ({
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        setCameraActive(true);
+        // Wait for video to actually start playing to avoid black flash
+        videoRef.current.onloadedmetadata = () => {
+            setCameraActive(true);
+            setIsLoading(false);
+        };
       }
       const allDevices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = allDevices.filter(d => d.kind === 'videoinput');
@@ -55,6 +61,7 @@ const CameraView: React.FC<CameraViewProps> = ({
       console.error("Camera error", err);
       setCameraActive(false);
       setPermissionDenied(true);
+      setIsLoading(false);
     }
   };
 
@@ -148,14 +155,15 @@ const CameraView: React.FC<CameraViewProps> = ({
           muted
           className={`w-full h-full object-cover transition-opacity duration-700 ${cameraActive ? 'opacity-100' : 'opacity-0'}`}
         />
-        {!cameraActive && (
-             <div className="absolute inset-0 bg-slate-900 flex flex-col items-center justify-center p-6 text-center">
+        
+        {/* Fallback / Error UI */}
+        {!cameraActive && !isLoading && (
+             <div className="absolute inset-0 bg-slate-900 flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-500">
                  <div className={`w-64 h-64 rounded-full blur-3xl animate-pulse absolute ${isSky ? 'bg-cyan-500/20' : 'bg-emerald-500/20'}`}></div>
                  
-                 {/* Explicit button for system camera if web cam fails */}
                  <div className="relative z-10 flex flex-col items-center gap-4">
                     <p className="text-white/50 text-sm font-serif-text tracking-wider">
-                        {permissionDenied ? "Camera Access Denied" : "Camera Initializing..."}
+                        {permissionDenied ? "Camera Access Denied" : "Camera unavailable"}
                     </p>
                     <button 
                         onClick={() => fileInputRef.current?.click()}
@@ -166,6 +174,13 @@ const CameraView: React.FC<CameraViewProps> = ({
                     </button>
                  </div>
              </div>
+        )}
+
+        {/* Loading Spinner (Hidden if active or error shown) */}
+        {isLoading && (
+            <div className="absolute inset-0 bg-black flex items-center justify-center z-20">
+                <Loader2 size={32} className="text-white/20 animate-spin" />
+            </div>
         )}
       </div>
 
